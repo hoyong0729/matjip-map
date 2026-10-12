@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#ffffff">
+  <title>유튜브 맛집 지도</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%23ff5a1f'/%3E%3Cpath fill='%23fff' d='M16 6a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7Zm0 9.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5Z'/%3E%3C/svg%3E">
+</head>
+<body>
+  <div class="app" id="app" data-view="map">
+
+    <!-- 상단: 검색 · 필터 (PC: 왼쪽 패널 위, 모바일: 지도 위에 떠 있음) -->
+    <header class="topbar" id="topbar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7Zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5Z"/></svg>
+        </span>
+        <span class="brand-name">유튜브 맛집</span>
+        <span class="brand-sub">먹을텐데에 나온 식당</span>
+      </div>
+
+      <form class="searchbar" id="searchForm" role="search" autocomplete="off">
+        <svg class="search-icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="m20 20-4.2-4.2M11 18a7 7 0 1 1 0-14 7 7 0 0 1 0 14Z"/></svg>
+        <input id="q" type="search" enterkeyhint="search" placeholder="상호·주소 또는 장소 (예: 강남역)" aria-label="상호, 주소 또는 장소 검색">
+        <button type="button" class="icon-btn" id="qClear" aria-label="검색어 지우기" hidden>
+          <svg viewBox="0 0 24 24" width="18" height="18"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
+      </form>
+
+      <button type="button" class="near-suggest" id="nearSuggest" hidden></button>
+
+      <div class="near-bar" id="nearBar" hidden>
+        <div class="near-label"><span class="near-dot"></span><span id="nearLabel"></span></div>
+        <div class="radius" id="radius" role="radiogroup" aria-label="반경">
+          <button type="button" data-km="0.5">500m</button>
+          <button type="button" data-km="1">1km</button>
+          <button type="button" data-km="3">3km</button>
+          <button type="button" data-km="5">5km</button>
+        </div>
+        <button type="button" class="icon-btn" id="nearClear" aria-label="주변 찾기 끄기">
+          <svg viewBox="0 0 24 24" width="16" height="16"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
+      </div>
+
+      <div class="filter-row">
+        <label class="select-pill">
+          <span class="sr-only">지역</span>
+          <select id="region"></select>
+          <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="m6 9 6 6 6-6"/></svg>
+        </label>
+        <div class="chips" id="chips" role="group" aria-label="음식 종류"></div>
+        <div class="seg" id="viewSeg" role="tablist" aria-label="보기">
+          <button type="button" data-view="map" role="tab">지도</button>
+          <button type="button" data-view="list" role="tab">목록</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- 목록 패널 (PC: 왼쪽 400px, 모바일: 아래에서 끌어올리는 시트) -->
+    <aside class="panel" id="panel" aria-label="식당 목록">
+      <div class="sheet-grip" id="sheetGrip" aria-hidden="true"><span></span></div>
+      <div class="list-meta" id="listMeta">
+        <span><b id="count">0</b>곳</span>
+        <span class="sort" id="sortLabel">최신 영상 순</span>
+      </div>
+      <div class="scroll" id="scroll">
+        <ul class="list" id="list"></ul>
+        <div class="empty" id="empty" hidden>
+          <p class="empty-title">조건에 맞는 식당이 없어요</p>
+          <p class="empty-sub">필터를 줄이거나 반경을 넓혀 보세요</p>
+        </div>
+      </div>
+      <section class="detail" id="detail" hidden aria-live="polite"></section>
+    </aside>
+
+    <main class="map-wrap" id="mapWrap">
+      <div id="map" aria-label="지도"></div>
+      <div class="updated" id="updated"></div>
+      <div class="zoom" id="zoom" hidden>
+        <button type="button" data-zoom="-1" aria-label="확대">
+          <svg viewBox="0 0 24 24" width="18" height="18"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M12 5v14M5 12h14"/></svg></button>
+        <button type="button" data-zoom="1" aria-label="축소">
+          <svg viewBox="0 0 24 24" width="18" height="18"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M5 12h14"/></svg></button>
+      </div>
+      <div class="map-message" id="mapMessage" hidden></div>
+    </main>
+  </div>
+
+  <script src="config.js" onerror="window.MATJIP_CONFIG = window.MATJIP_CONFIG || {}"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
