@@ -22,8 +22,12 @@
     cats: new Set(),
     region: "",          // "서울" 또는 "서울|중구", "" = 전체
     view: "map",
-    near: null,          // { lat, lon, label, query }
+    near: null,          // { lat, lon, label, query } — 검색한 장소 주변
     radiusKm: 1,
+    // 내 위치: 이 탭의 메모리에만 둔다. 저장(localStorage 등)하거나 어디로도 보내지 않는다.
+    me: null,            // { lat, lon }
+    meRadiusKm: 0,       // 0 = 전체 (가까운 순 정렬만)
+    geoNoticeShown: false,
     selected: null,
     sheet: "half",       // 모바일 시트: peek / half / full
   };
@@ -35,6 +39,7 @@
     nearBar: $("nearBar"), nearLabel: $("nearLabel"), nearClear: $("nearClear"), radius: $("radius"),
     region: $("region"), chips: $("chips"), viewSeg: $("viewSeg"),
     updated: $("updated"), mapMessage: $("mapMessage"), grip: $("sheetGrip"), listMeta: $("listMeta"),
+    locate: $("locateBtn"), meRadius: $("meRadius"), toast: $("toast"),
   };
 
   // ---------------------------------------------------------------- 유틸
@@ -61,20 +66,27 @@
     return true;
   }
 
+  // 거리 기준점: 검색한 장소가 있으면 그곳, 없으면 내 위치
+  const origin = () => state.near || state.me;
+  const distFrom = (r) => {
+    const o = origin();
+    return o && r.lat != null ? distanceKm(o.lat, o.lon, r.lat, r.lon) : null;
+  };
+
   function visible() {
     const q = state.q.trim().toLowerCase();
     let rows = state.all.filter(matchesBase);
-    if (state.near) {
-      rows = rows
-        .filter((r) => r.lat != null)
-        .map((r) => ({ ...r, _dist: distanceKm(state.near.lat, state.near.lon, r.lat, r.lon) }))
-        .filter((r) => r._dist <= state.radiusKm)
-        .sort((a, b) => a._dist - b._dist);
-    } else {
-      if (q) rows = rows.filter((r) => r.name.toLowerCase().includes(q) || r.address.toLowerCase().includes(q));
-      rows = rows.sort((a, b) => latestDate(b).localeCompare(latestDate(a)) || a.name.localeCompare(b.name));
+    if (!state.near && q) {
+      rows = rows.filter((r) => r.name.toLowerCase().includes(q) || r.address.toLowerCase().includes(q));
     }
-    return rows;
+    if (!origin()) {
+      return rows.sort((a, b) => latestDate(b).localeCompare(latestDate(a)) || a.name.localeCompare(b.name));
+    }
+    const limit = state.near ? state.radiusKm : state.meRadiusKm;   // 0 = 전체
+    return rows
+      .map((r) => ({ ...r, _dist: distFrom(r) }))
+      .filter((r) => !limit || (r._dist != null && r._dist <= limit))
+      .sort((a, b) => (a._dist ?? Infinity) - (b._dist ?? Infinity));
   }
 
   // ---------------------------------------------------------------- 필터 UI
@@ -143,7 +155,13 @@
   function render({ fit = false } = {}) {
     const rows = visible();
     el.count.textContent = rows.length;
-    el.sortLabel.textContent = state.near ? "가까운 순" : "최신 영상 순";
+    el.sortLabel.textContent = state.near ? "가까운 순" : state.me ? "내 위치에서 가까운 순" : "최신 영상 순";
+    el.meRadius.hidden = !state.me || !!state.near;
+    el.sortLabel.hidden = !el.meRadius.hidden && MOBILE.matches;     // 모바일은 좁아서 반경 버튼만
+    for (const b of el.meRadius.querySelectorAll("button")) {
+      b.setAttribute("aria-checked", String(+b.dataset.km === state.meRadiusKm));
+    }
+    el.locate.classList.toggle("is-on", !!state.me && !state.near);
     el.list.innerHTML = rows.map(cardHTML).join("");
     el.empty.hidden = rows.length > 0;
     for (const b of el.chips.querySelectorAll(".chip")) {
@@ -158,7 +176,7 @@
   function openDetail(id, { pan = true } = {}) {
     const base = state.all.find((r) => r.id === id);
     if (!base) return;
-    const r = { ...base, _dist: state.near ? distanceKm(state.near.lat, state.near.lon, base.lat, base.lon) : null };
+    const r = { ...base, _dist: distFrom(base) };
     state.selected = id;
     const dist = r._dist != null ? `<span class="sep"></span><span class="dist">${fmtDist(r._dist)}</span>` : "";
     el.detail.innerHTML = `
@@ -200,7 +218,7 @@
   }
 
   // ---------------------------------------------------------------- 지도 (카카오)
-  let map = null, clusterer = null, nearOverlay = null, nearCircle = null;
+  let map = null, clusterer = null, nearOverlay = null, nearCircle = null, meOverlay = null, meCircle = null;
   const pins = new Map();         // id → { overlay, node }
   let labelOverlay = null;
   const mapReady = () => !!(map && window.kakao?.maps?.services);
@@ -267,6 +285,7 @@
     clusterer.addMarkers(overlays);
     highlightPin(state.selected);
     drawNear();
+    drawMe();
     if (fit) fitTo(rows);
   }
 
@@ -278,16 +297,26 @@
     return [top, 40, Math.max(bottom, 60), 40];
   }
 
+  // 중심(lat, lon)에서 반경 km 가 다 보이는 범위 — 중심이 화면 가운데에 오도록 대칭으로 잡는다
+  function circleBounds(lat, lon, km) {
+    const K = kakao.maps;
+    const dLat = km / 111, dLon = km / (111 * Math.cos(lat * Math.PI / 180));
+    return new K.LatLngBounds(new K.LatLng(lat - dLat, lon - dLon), new K.LatLng(lat + dLat, lon + dLon));
+  }
+
   function fitTo(rows) {
     const K = kakao.maps;
     const pts = rows.filter((r) => r.lat != null);
     if (state.near) {
-      const c = new K.LatLng(state.near.lat, state.near.lon);
-      const d = state.radiusKm / 111;
-      const b = new K.LatLngBounds(new K.LatLng(state.near.lat - d, state.near.lon - d * 1.25),
-                                   new K.LatLng(state.near.lat + d, state.near.lon + d * 1.25));
-      map.setBounds(b, ...padding());
-      return void c;
+      map.setBounds(circleBounds(state.near.lat, state.near.lon, state.radiusKm), ...padding());
+      return;
+    }
+    if (state.me && !state.region) {
+      // 내 위치를 가운데에 두고, 반경이 있으면 그 원이, '전체'면 가장 가까운 3곳까지 보이게 (최대 5km)
+      const nearest = pts.slice(0, 3).map((r) => r._dist).filter((d) => d != null);
+      const km = state.meRadiusKm || Math.min(Math.max(...nearest, 0.4), 5);
+      map.setBounds(circleBounds(state.me.lat, state.me.lon, km), ...padding());
+      return;
     }
     if (!pts.length) return;
     if (pts.length === 1) { map.setLevel(4); map.setCenter(new K.LatLng(pts[0].lat, pts[0].lon)); return; }
@@ -339,6 +368,71 @@
     dot.className = "here";
     nearOverlay = new K.CustomOverlay({ position: c, content: dot, zIndex: 1 });
     nearOverlay.setMap(map);
+  }
+
+  function drawMe() {
+    if (meOverlay) { meOverlay.setMap(null); meOverlay = null; }
+    if (meCircle) { meCircle.setMap(null); meCircle = null; }
+    if (!state.me || !map) return;
+    const K = kakao.maps;
+    const c = new K.LatLng(state.me.lat, state.me.lon);
+    if (state.meRadiusKm && !state.near) {
+      meCircle = new K.Circle({ center: c, radius: state.meRadiusKm * 1000, strokeWeight: 2, strokeColor: "#1a73e8",
+                                strokeOpacity: 0.5, strokeStyle: "shortdash", fillColor: "#1a73e8", fillOpacity: 0.05 });
+      meCircle.setMap(map);
+    }
+    const dot = document.createElement("div");
+    dot.className = "me-dot";
+    dot.setAttribute("aria-label", "내 위치");
+    meOverlay = new K.CustomOverlay({ position: c, content: dot, zIndex: 4, clickable: false });
+    meOverlay.setMap(map);
+  }
+
+  // ---------------------------------------------------------------- 내 위치
+  // 위치는 브라우저에서만 쓴다: 거리 계산·정렬·파란 점 표시. 저장하거나 서버·카카오로 보내지 않는다
+  // (지도를 그 근처로 옮기면 지도 타일은 그 지역 것을 받아 오지만, 좌표 자체를 넘기지는 않는다).
+  function getPosition() {
+    return new Promise((resolve, reject) => {
+      if (!("geolocation" in navigator)) return reject({ code: 0 });
+      navigator.geolocation.getCurrentPosition(
+        (p) => resolve({ lat: p.coords.latitude, lon: p.coords.longitude }),
+        reject,
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
+      );
+    });
+  }
+
+  let toastTimer = null;
+  function toast(msg) {
+    el.toast.textContent = msg;
+    el.toast.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => (el.toast.hidden = true), 4000);
+  }
+
+  async function locate({ user = false } = {}) {
+    el.locate.setAttribute("aria-busy", "true");
+    try {
+      state.me = await getPosition();
+      if (user && state.near) {           // 장소 주변 찾기 중이었으면 끄고 내 위치 기준으로
+        state.near = null;
+        el.q.value = "";
+        state.q = "";
+      }
+      if (user) closeDetail();
+      render({ fit: !!map && !state.near });
+    } catch (e) {
+      // 거부·실패해도 화면은 지금처럼(최신 영상 순). 처음에는 한 번만 작게 알리고, 버튼을 눌렀을 때는 이유를 알린다
+      if (user) {
+        toast(e && e.code === 1 ? "브라우저 설정에서 이 사이트의 위치 권한을 허용해 주세요"
+                                : "현재 위치를 찾지 못했어요. 잠시 후 다시 눌러 주세요");
+      } else if (!state.geoNoticeShown) {
+        state.geoNoticeShown = true;
+        toast("위치를 확인할 수 없어 최신 영상 순으로 보여드려요");
+      }
+    } finally {
+      el.locate.removeAttribute("aria-busy");
+    }
   }
 
   // ---------------------------------------------------------------- 장소 주변 찾기
@@ -417,7 +511,7 @@
   function enableSheetDrag() {
     let startY = 0, startOffset = 0, dragging = false, moved = false;
     const onDown = (e) => {
-      if (!MOBILE.matches) return;
+      if (!MOBILE.matches || e.target.closest("button")) return;     // 반경 버튼 등은 끌기가 아니라 누르기
       dragging = true; moved = false;
       startY = e.clientY;
       startOffset = sheetGeometry().offsets[state.sheet];
@@ -474,6 +568,13 @@
       const b = e.target.closest("button[data-km]");
       if (!b) return;
       state.radiusKm = +b.dataset.km;
+      render({ fit: true });
+    });
+    el.locate.addEventListener("click", () => locate({ user: true }));
+    el.meRadius.addEventListener("click", (e) => {
+      const b = e.target.closest("button[data-km]");
+      if (!b) return;
+      state.meRadiusKm = +b.dataset.km;
       render({ fit: true });
     });
     el.region.addEventListener("change", () => { state.region = el.region.value; closeDetail(); render({ fit: true }); });
@@ -548,6 +649,9 @@
     renderRegionOptions();
     renderChips();
     render();
+
+    // 처음 열 때 위치 권한 요청 (지도 로딩과 동시에). 허용하면 가까운 순 + 지도를 내 위치로
+    locate();
 
     try {
       await loadKakao((window.MATJIP_CONFIG || {}).kakaoJsKey);
