@@ -1,4 +1,4 @@
-/* 유튜브 맛집 지도 — 빌드 도구 없는 정적 웹앱.
+/* 맛도리 (유튜버가 다녀간 맛집 지도) — 빌드 도구 없는 정적 웹앱.
  * 데이터: data/restaurants.json (python -m matjip export)
  * 지도:   카카오맵 JavaScript SDK (config.js 의 kakaoJsKey, services·clusterer 라이브러리)
  */
@@ -63,6 +63,11 @@
   // 설명란에서 확정한 식당(먹을텐데 등)과 구분: 여러 증거로 자동 매칭한 식당에만 작은 배지
   const autoBadge = (r) => (r.source === "자동매칭"
     ? `<span class="badge badge-auto" title="설명란에 주소가 없어 블로그·카카오 장소 검색 증거로 찾은 식당">자동 매칭</span>` : "");
+  // 지역 검색(채널이 아니라 지역 검색어로 찾은 영상): 채널 필터에서는 '지역 검색' 하나로 묶고, 카드·상세에는 실제 채널명
+  const REGION_PROGRAM = "지역 검색";
+  const regionChannels = (r) => [...new Set(r.videos.filter((v) => v.program === REGION_PROGRAM).map((v) => v.channel).filter(Boolean))];
+  const regionBadge = `<span class="badge badge-region" title="채널이 아니라 지역 검색어로 찾은 영상에서 여러 증거로 찾은 식당">지역 검색</span>`;
+  const videoSource = (v) => (v.program === REGION_PROGRAM ? `${v.channel || "유튜브"} · ${REGION_PROGRAM}` : v.program);
   const naverSearch = (r) => `https://map.naver.com/p/search/${encodeURIComponent(`${r.name} ${r.subregion || r.region}`)}`;
 
   // ---------------------------------------------------------------- 길찾기 (휴대폰: 앱 바로, 없으면 웹 / PC: 웹)
@@ -236,7 +241,9 @@
         <h3>${esc(r.name)}</h3>
         <div class="meta"><span class="cat" style="--c:${COLORS[r.category] || COLORS["기타"]}">${esc(r.category)}</span>
           <span>${esc(r.hood || r.region)}</span>${dist}</div>
-        <div class="badges">${progs.map((p) => `<span class="badge badge-prog">${esc(p)}</span>`).join("")}${autoBadge(r)}${
+        <div class="badges">${progs.filter((p) => p !== REGION_PROGRAM).map((p) => `<span class="badge badge-prog">${esc(p)}</span>`).join("")}${
+          regionChannels(r).map((c) => `<span class="badge badge-prog">${esc(c)}</span>`).join("")}${
+          progs.includes(REGION_PROGRAM) ? regionBadge : ""}${autoBadge(r)}${
           r.videos.length > 1 ? `<span class="badge-count">영상 ${r.videos.length}개</span>` : ""}</div>
       </div></li>`;
   }
@@ -276,7 +283,7 @@
       <div class="hero"><img src="${esc(r.videos[0] ? ytThumb(r.videos[0].id) : r.thumb)}" alt=""></div>
       <h2>${esc(r.name)}</h2>
       <div class="meta"><span class="cat" style="--c:${COLORS[r.category] || COLORS["기타"]}">${esc(r.category)}</span>
-        <span>${esc(r.hood || r.region)}</span>${dist}${autoBadge(r)}</div>
+        <span>${esc(r.hood || r.region)}</span>${dist}${autoBadge(r)}${programsOf(r).includes(REGION_PROGRAM) ? regionBadge : ""}</div>
       <p class="addr"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7Zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5Z"/></svg>
         <span>${esc(r.address)}</span><button type="button" class="copy" data-action="copy">복사</button></p>
       ${r.lat != null ? `
@@ -292,7 +299,7 @@
       <ul class="videos">${r.videos.map((v) => `
         <li><a class="video" href="https://www.youtube.com/watch?v=${encodeURIComponent(v.id)}" target="_blank" rel="noopener">
           <div class="thumb"><img loading="lazy" src="${ytThumb(v.id)}" alt=""></div>
-          <div><b>${esc(v.title)}</b><span>${esc(v.program)} · ${esc(v.date)}</span></div></a></li>`).join("")}
+          <div><b>${esc(v.title)}</b><span>${esc(videoSource(v))} · ${esc(v.date)}</span></div></a></li>`).join("")}
       </ul>`;
     el.detail.hidden = false;
     el.scroll.hidden = true;
@@ -853,9 +860,9 @@
   const IC_SHARE = `<svg class="ios-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 3v11M8 7l4-4 4 4M8 10H6v10h12V10h-2"/></svg>`;
   const IC_ADD = `<svg class="ios-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M7 4h10a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3ZM12 8v8M8 12h8"/></svg>`;
   const INSTALL_TEXT = {
-    prompt: "<b>홈 화면에 앱으로 설치하기</b>주소창 없이 앱처럼 바로 열려요",
-    ios: `<b>홈 화면에 앱으로 추가하기</b>${IC_SHARE} 공유 → ${IC_ADD} 홈 화면에 추가 <small>(공유가 안 보이면 ··· 먼저)</small>`,
-    iosOther: "<b>사파리에서 열어 주세요</b>Safari 에서 홈 화면에 앱으로 추가할 수 있어요",
+    prompt: "<b>맛도리를 홈 화면에 설치하기</b>주소창 없이 앱처럼 바로 열려요",
+    ios: `<b>맛도리를 홈 화면에 추가하기</b>${IC_SHARE} 공유 → ${IC_ADD} 홈 화면에 추가 <small>(공유가 안 보이면 ··· 먼저)</small>`,
+    iosOther: "<b>사파리에서 열어 주세요</b>Safari 에서 맛도리를 홈 화면에 추가할 수 있어요",
   };
   let installPrompt = null;
 
@@ -920,6 +927,22 @@
     if (deviceKind() === "ios") setTimeout(() => showInstall(iosBrowser() === "safari" ? "ios" : "iosOther"), 1200);
   }
 
+  // ---------------------------------------------------------------- 방문자 수 (GoatCounter 공개 카운터)
+  // GoatCounter 사이트 설정의 'Allow adding visitor counts on your website' 를 켜야 숫자가 온다 (꺼져 있으면 403 → 숨김).
+  // 로컬에서는 index.html 이 count.js 를 안 불러와 window.goatcounter 가 없으니 카운터도 안 보인다
+  const VISITS_URL = "https://matdori.goatcounter.com/counter/TOTAL.json";
+  async function loadVisits() {
+    if (!window.goatcounter) return;
+    const today = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);       // 한국 날짜
+    const get = (q) => fetch(VISITS_URL + q).then((r) => (r.ok ? r.json() : null))
+      .then((d) => (d && d.count != null ? String(d.count) : null)).catch(() => null);
+    const [day, total] = await Promise.all([get(`?start=${today}`), get("")]);
+    if (total == null) return;
+    el.updated.insertAdjacentHTML("beforeend", `<span class="visits">${
+      day != null ? ` · 오늘 방문 <b>${esc(day)}</b>` : ""} · 누적 <b>${esc(total)}</b></span>`);
+    el.updated.hidden = false;
+  }
+
   // ---------------------------------------------------------------- 시작
   async function main() {
     bind();
@@ -947,6 +970,7 @@
     renderRegionOptions();
     renderChips();
     render();
+    loadVisits();
 
     // 처음 열 때 위치 권한 요청 (지도 로딩과 동시에). 허용하면 가까운 순 + 지도를 내 위치로
     renderChannels();

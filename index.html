@@ -4,12 +4,22 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#ffffff">
-  <title>유튜브 맛집 지도</title>
+  <title>맛도리 - 유튜버가 다녀간 맛집 지도</title>
+  <meta name="description" content="먹을텐데·정육왕·쯔양 등 유튜버가 다녀간 맛집을 지도에서 찾아보세요">
+  <!-- 카카오톡·SNS 링크 미리보기 (이미지는 절대 주소여야 함) -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="맛도리">
+  <meta property="og:title" content="맛도리 - 유튜버가 다녀간 맛집 지도">
+  <meta property="og:description" content="먹을텐데·정육왕·쯔양 등 유튜버가 다녀간 맛집을 지도에서 찾아보세요">
+  <meta property="og:url" content="https://hoyong0729.github.io/matjip-map/">
+  <meta property="og:image" content="https://hoyong0729.github.io/matjip-map/icons/icon-512.png">
+  <meta property="og:image:width" content="512">
+  <meta property="og:image:height" content="512">
   <!-- 홈 화면 앱 (PWA) -->
   <link rel="manifest" href="manifest.json">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-title" content="맛집지도">
+  <meta name="apple-mobile-web-app-title" content="맛도리">
   <!-- 상태바 위로 화면을 깐다 → 상단 검색창은 env(safe-area-inset-top) 만큼 내려서 가리지 않게 (style.css) -->
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
@@ -17,6 +27,21 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
   <link rel="stylesheet" href="css/style.css">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <!-- 방문자 수 (GoatCounter https://matdori.goatcounter.com). 쿠키 없음.
+       보내는 것은 경로(/matjip-map/ — 주소 뒤 ?·# 는 빼고)·페이지 제목·이전 페이지·화면 크기뿐. 내 위치는 보내지 않는다.
+       로컬(127.0.0.1·localhost·사설 IP·파일)에서 열면 스크립트를 아예 불러오지 않는다. 앱으로 연 경우(standalone)도 똑같이 집계 -->
+  <script>
+    (function () {
+      var h = location.hostname;
+      if (location.protocol === "file:" || /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|0\.0\.0\.0$|\[::1\]$)/.test(h)) return;
+      window.goatcounter = { no_events: true, path: function () { return location.pathname; } };
+      var s = document.createElement("script");
+      s.async = true;
+      s.src = "https://gc.zgo.at/count.js";
+      s.setAttribute("data-goatcounter", "https://matdori.goatcounter.com/count");
+      document.head.appendChild(s);
+    })();
+  </script>
 </head>
 <body>
   <div class="app" id="app" data-view="map">
@@ -27,12 +52,14 @@
         <span class="brand-mark" aria-hidden="true">
           <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7Zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5Z"/></svg>
         </span>
-        <span class="brand-name">유튜브 맛집</span>
-        <span class="brand-sub">먹을텐데에 나온 식당</span>
+        <span class="brand-name">맛도리</span>
+        <span class="brand-sub">유튜버가 다녀간 맛집 지도</span>
       </div>
 
       <div class="search-row">
       <form class="searchbar" id="searchForm" role="search" autocomplete="off">
+        <!-- 휴대폰: 위 제목 줄이 없으니 검색창 안 왼쪽에 작은 이름 (돋보기 자리) -->
+        <span class="search-brand" aria-hidden="true">맛도리</span>
         <svg class="search-icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="m20 20-4.2-4.2M11 18a7 7 0 1 1 0-14 7 7 0 0 1 0 14Z"/></svg>
         <input id="q" type="search" enterkeyhint="search" placeholder="상호·주소 또는 장소 (예: 강남역)" aria-label="상호, 주소 또는 장소 검색">
         <button type="button" class="icon-btn" id="qClear" aria-label="검색어 지우기" hidden>
