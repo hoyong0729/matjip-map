@@ -47,6 +47,7 @@
     locate: $("locateBtn"), meRadius: $("meRadius"), toast: $("toast"),
     channelBtn: $("channelBtn"), channelPop: $("channelPop"), channelLabel: $("channelLabel"),
     subsetClear: $("subsetClear"),
+    installBar: $("installBar"), installText: $("installText"), installGo: $("installGo"), installClose: $("installClose"),
   };
 
   // ---------------------------------------------------------------- 유틸
@@ -677,6 +678,7 @@
     if (name === "closed" && clearSubset()) render();                  // 같은 위치 목록도 접으면 원래 목록으로
     state.sheet = name;
     el.panel.dataset.sheet = name;
+    el.app.dataset.sheet = name;                                        // 앱 설치 안내 띠는 접혔을 때만 (style.css)
     el.panel.classList.toggle("is-closed", name === "closed");
     const g = sheetGeometry();
     el.panel.classList.toggle("dragging", !animate);
@@ -699,6 +701,7 @@
       startY = e.clientY;
       startOffset = sheetGeometry().offsets[state.sheet];
       el.panel.classList.add("dragging");
+      el.app.classList.add("sheet-dragging");                         // 끄는 동안 앱 설치 띠 숨김
       e.target.setPointerCapture?.(e.pointerId);
     };
     const onMove = (e) => {
@@ -712,6 +715,7 @@
       if (!dragging) return;
       dragging = false;
       el.panel.classList.remove("dragging");
+      el.app.classList.remove("sheet-dragging");
       const g = sheetGeometry();
       const y = startOffset + (e.clientY - startY);
       if (!moved) {                       // 탭: 접힘 → 반 → 전체 → 반
@@ -840,9 +844,86 @@
     el.mapMessage.hidden = false;
   }
 
+  // ---------------------------------------------------------------- 앱 설치 안내 (휴대폰)
+  // 안드로이드 크롬: beforeinstallprompt 를 잡아 두었다가 [설치] → 바로 설치 창
+  // 아이폰 사파리: 설치 API 가 없어 '공유 → 홈 화면에 추가' 안내 / 아이폰의 다른 브라우저: 사파리에서 열라는 안내
+  // 앱으로 실행 중·설치함·[닫기](30일) 이면 띄우지 않는다. localStorage 에는 이 두 표시만 둔다 (위치는 저장 안 함)
+  const INSTALL_DISMISSED = "matjip-install-dismissed", INSTALLED = "matjip-installed";
+  const DISMISS_DAYS = 30;
+  const IC_SHARE = `<svg class="ios-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 3v11M8 7l4-4 4 4M8 10H6v10h12V10h-2"/></svg>`;
+  const IC_ADD = `<svg class="ios-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M7 4h10a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3ZM12 8v8M8 12h8"/></svg>`;
+  const INSTALL_TEXT = {
+    prompt: "<b>홈 화면에 앱으로 설치하기</b>주소창 없이 앱처럼 바로 열려요",
+    ios: `<b>홈 화면에 앱으로 추가하기</b>${IC_SHARE} 공유 → ${IC_ADD} 홈 화면에 추가 <small>(공유가 안 보이면 ··· 먼저)</small>`,
+    iosOther: "<b>사파리에서 열어 주세요</b>Safari 에서 홈 화면에 앱으로 추가할 수 있어요",
+  };
+  let installPrompt = null;
+
+  const storeGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
+  const storeSet = (k, v) => { try { localStorage.setItem(k, v); } catch { /* 저장 못 하면 이번만 */ } };
+
+  function isStandalone() {
+    return matchMedia("(display-mode: standalone)").matches || matchMedia("(display-mode: fullscreen)").matches
+      || navigator.standalone === true;                                   // 아이폰 홈 화면 앱
+  }
+
+  function installSuppressed() {
+    if (isStandalone() || storeGet(INSTALLED)) return true;
+    const t = +storeGet(INSTALL_DISMISSED);
+    return t > 0 && Date.now() - t < DISMISS_DAYS * 864e5;
+  }
+
+  // 아이폰 브라우저: 사파리만 '홈 화면에 추가' 안내, 크롬·카카오톡 등 앱 안 브라우저는 사파리로 안내
+  function iosBrowser() {
+    const ua = navigator.userAgent || "";
+    if (/CriOS|FxiOS|EdgiOS|KAKAOTALK|NAVER|Instagram|FBAN|FBAV|Line\//.test(ua)) return "other";
+    return /Version\/[\d.]+.*Safari\//.test(ua) ? "safari" : "other";
+  }
+
+  function showInstall(kind) {
+    if (installSuppressed()) return;
+    el.installText.innerHTML = INSTALL_TEXT[kind];
+    el.installGo.hidden = kind !== "prompt";
+    el.installBar.hidden = false;
+    el.app.classList.add("has-install");
+  }
+
+  function hideInstall() {
+    el.installBar.hidden = true;
+    el.app.classList.remove("has-install");
+  }
+
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();                   // 크롬 기본 안내 대신 우리 띠 ([닫기] 했으면 아무것도 안 띄움)
+    installPrompt = e;
+    showInstall("prompt");
+  });
+  window.addEventListener("appinstalled", () => { storeSet(INSTALLED, "1"); installPrompt = null; hideInstall(); });
+
+  function bindInstall() {
+    // 띠 높이 → '마지막 업데이트'를 그 위로 (시트가 열려 있으면 띠가 숨겨져 0 이라, 보일 때마다 다시 잰다)
+    if ("ResizeObserver" in window) {
+      new ResizeObserver(() => {
+        if (el.installBar.offsetHeight) el.app.style.setProperty("--install-h", `${el.installBar.offsetHeight}px`);
+      }).observe(el.installBar);
+    }
+    el.installClose.addEventListener("click", () => { storeSet(INSTALL_DISMISSED, String(Date.now())); hideInstall(); });
+    el.installGo.addEventListener("click", async () => {
+      const p = installPrompt;
+      if (!p) return hideInstall();
+      installPrompt = null;               // prompt() 는 이벤트마다 한 번만 쓸 수 있다
+      hideInstall();
+      p.prompt();
+      const { outcome } = await p.userChoice;
+      if (outcome === "accepted") storeSet(INSTALLED, "1");  // 설치 창에서 취소하면 이번에만 숨김 (다음 방문 때 다시)
+    });
+    if (deviceKind() === "ios") setTimeout(() => showInstall(iosBrowser() === "safari" ? "ios" : "iosOther"), 1200);
+  }
+
   // ---------------------------------------------------------------- 시작
   async function main() {
     bind();
+    bindInstall();
     setView("map");
     // 모바일 첫 화면은 지도가 주인공: 시트는 접힌 바(손잡이 + 'N곳')로 시작
     if (MOBILE.matches) setSheet("closed", { animate: false });

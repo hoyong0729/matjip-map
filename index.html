@@ -119,6 +119,14 @@
     </main>
 
     <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+    <!-- 앱 설치 안내 (휴대폰, 시트가 접혀 있을 때만 그 바로 위). 안드로이드: [설치] → 설치 창 / 아이폰: 공유 → 홈 화면에 추가 -->
+    <div class="install-bar" id="installBar" role="region" aria-label="앱 설치 안내" hidden>
+      <img class="install-icon" src="icons/icon-192.png" alt="" width="36" height="36">
+      <div class="install-text" id="installText"></div>
+      <button type="button" class="install-go" id="installGo" hidden>설치</button>
+      <button type="button" class="install-close" id="installClose">닫기</button>
+    </div>
   </div>
 
   <script src="config.js" onerror="window.MATJIP_CONFIG = window.MATJIP_CONFIG || {}"></script>
