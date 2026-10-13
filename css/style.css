@@ -152,6 +152,40 @@ a { color: inherit; text-decoration: none; }
 .select-pill svg { position: absolute; right: 11px; pointer-events: none; color: var(--ink-3); }
 .select-pill:focus-within { border-color: var(--accent); }
 
+/* 채널(유튜버) 여러 개 선택 */
+.channel-pick { position: relative; }
+.pill-btn {
+  display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 12px 0 14px;
+  border: 1px solid var(--line-2); border-radius: 18px; background: var(--bg);
+  font-size: 14px; font-weight: 600; color: var(--ink); white-space: nowrap; max-width: 130px;
+}
+.pill-btn span { overflow: hidden; text-overflow: ellipsis; }
+.pill-btn svg { flex: none; color: var(--ink-3); }
+.pill-btn.is-on { border-color: var(--ink); background: var(--ink); color: #fff; }
+.pill-btn.is-on svg { color: rgba(255, 255, 255, .7); }
+.channel-pop {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 10; min-width: 200px;
+  padding: 6px; border-radius: 14px; background: #fff; box-shadow: var(--shadow-2);
+  display: grid; gap: 2px;
+}
+.ch-item {
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px;
+  border: 0; border-radius: 10px; background: transparent; text-align: left;
+  font-size: 15px; font-weight: 600; color: var(--ink);
+}
+.ch-item:hover { background: var(--bg-2); }
+.ch-item .n { margin-left: auto; font-weight: 500; font-size: 13px; color: var(--ink-3); }
+.ch-check {
+  width: 18px; height: 18px; flex: none; border-radius: 5px; border: 2px solid #c6ccd3; position: relative;
+}
+.ch-item[aria-pressed="true"] .ch-check { background: var(--accent); border-color: var(--accent); }
+.ch-item[aria-pressed="true"] .ch-check::after {
+  content: ""; position: absolute; left: 4px; top: 0; width: 5px; height: 10px;
+  border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg);
+}
+.ch-item[data-ch=""][aria-pressed="true"] { color: var(--accent-ink); }
+.ch-item[data-ch=""] { border-bottom: 1px solid var(--line); border-radius: 10px 10px 4px 4px; }
+
 .seg { margin-left: auto; display: flex; padding: 3px; border-radius: 11px; background: var(--bg-2); }
 .seg button {
   border: 0; background: transparent; height: 30px; padding: 0 14px; border-radius: 8px;
@@ -185,6 +219,10 @@ a { color: inherit; text-decoration: none; }
 }
 .list-meta b { color: var(--ink); font-size: 15px; margin-right: 1px; }
 .list-meta .sort { margin-left: auto; margin-right: 8px; }
+.subset-clear {
+  border: 0; background: var(--accent-soft); color: var(--accent-ink); border-radius: 8px;
+  padding: 4px 10px; font-size: 12.5px; font-weight: 700;
+}
 .me-radius { display: flex; gap: 2px; padding: 2px; border-radius: 9px; background: #e9ecf0; }
 .me-radius button {
   border: 0; background: transparent; padding: 3px 8px; border-radius: 7px;
@@ -233,6 +271,10 @@ a { color: inherit; text-decoration: none; }
 }
 
 .badge-auto { border-color: #c9d8ff; background: #f2f6ff; color: #3159c9; }
+/* 카드 배지 순서: [프로그램] [자동 매칭] 영상 N개 — 프로그램은 진하게, 자동 매칭은 파랑, 영상 수는 글자만 */
+.badges { align-items: center; }
+.badge-prog { border-color: transparent; background: var(--bg-2); color: var(--ink); }
+.badge-count { font-size: 11.5px; font-weight: 600; color: var(--ink-3); margin-left: 2px; }
 .empty { text-align: center; padding: 48px 16px; }
 .empty-title { margin: 0 0 4px; font-weight: 700; }
 .empty-sub { margin: 0; color: var(--ink-3); font-size: 14px; }
@@ -254,7 +296,14 @@ a { color: inherit; text-decoration: none; }
   flex: none; margin-left: auto; border: 1px solid var(--line-2); background: #fff; border-radius: 8px;
   padding: 2px 8px; font-size: 12px; font-weight: 600; color: var(--ink-2);
 }
-.actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 16px 0 22px; }
+.actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0 22px; }
+.actions .btn { border: 0; cursor: pointer; }
+.route-mode { display: flex; gap: 4px; margin-top: 16px; padding: 3px; border-radius: 11px; background: var(--bg-2); }
+.route-mode button {
+  flex: 1; border: 0; background: transparent; height: 32px; border-radius: 8px;
+  font-size: 13.5px; font-weight: 600; color: var(--ink-3);
+}
+.route-mode button[aria-checked="true"] { background: #fff; color: var(--ink); box-shadow: var(--shadow-1); }
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   height: 46px; border-radius: 12px; font-size: 15px; font-weight: 700;
@@ -387,6 +436,11 @@ a { color: inherit; text-decoration: none; }
   .toast { top: calc(var(--sheet-top, 160px) + 18px); bottom: auto; white-space: normal; text-align: center; border-radius: 14px; }
   .filter-row { margin-top: 10px; gap: 6px; }
   .select-pill { box-shadow: var(--shadow-1); border-color: transparent; }
+  .select-pill select { max-width: 132px; padding-right: 28px; }
+  .pill-btn { box-shadow: var(--shadow-1); border-color: transparent; max-width: 96px; padding: 0 10px 0 12px; }
+  .pill-btn.is-on { border-color: var(--ink); }
+  /* 홈 화면 앱(상태바·홈 표시줄 아래로 깔림): 시트 아래쪽 내용이 홈 표시줄에 가리지 않게 */
+  .scroll, .detail { padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
   .seg { background: #fff; box-shadow: var(--shadow-1); }
   .chips { margin: 0 -12px; padding: 2px 12px 6px; }
   .chip { border-color: transparent; box-shadow: var(--shadow-1); }

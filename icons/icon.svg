@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- 유튜브 맛집 지도: 지도 핀 + 숟가락 (자체 디자인). 가장자리까지 채운 정사각형 — 안드로이드 maskable 안전 영역(가운데 80%) 안에 그림 -->
+  <rect width="512" height="512" fill="#ff5a1f"/>
+  <!-- 핀: 중심 (256,222) 반지름 130 원 + 꼭짓점 (256,424) 로 이어지는 접선 -->
+  <path d="M156.6 305.8A130 130 0 1 1 355.4 305.8L256 424Z" fill="#fff"/>
+  <ellipse cx="256" cy="186" rx="38" ry="50" fill="#ff5a1f"/>
+  <rect x="244" y="222" width="24" height="112" rx="12" fill="#ff5a1f"/>
+</svg>

@@ -20,6 +20,9 @@
     all: [],
     q: "",
     cats: new Set(),
+    channels: new Set(), // 채널(프로그램) 여러 개 선택. 비면 전체
+    subset: null,        // 클러스터를 최대로 확대해도 안 펼쳐질 때(같은 건물) 그 식당 id 들만 목록에
+    routeMode: "public", // 길찾기 이동수단: public(대중교통) / walk(도보) / car(자동차)
     region: "",          // "서울" 또는 "서울|중구", "" = 전체
     view: "map",
     near: null,          // { lat, lon, label, query } — 검색한 장소 주변
@@ -42,6 +45,8 @@
     region: $("region"), chips: $("chips"), viewSeg: $("viewSeg"),
     updated: $("updated"), mapMessage: $("mapMessage"), grip: $("sheetGrip"), listMeta: $("listMeta"),
     locate: $("locateBtn"), meRadius: $("meRadius"), toast: $("toast"),
+    channelBtn: $("channelBtn"), channelPop: $("channelPop"), channelLabel: $("channelLabel"),
+    subsetClear: $("subsetClear"),
   };
 
   // ---------------------------------------------------------------- 유틸
@@ -57,12 +62,70 @@
   // 설명란에서 확정한 식당(먹을텐데 등)과 구분: 여러 증거로 자동 매칭한 식당에만 작은 배지
   const autoBadge = (r) => (r.source === "자동매칭"
     ? `<span class="badge badge-auto" title="설명란에 주소가 없어 블로그·카카오 장소 검색 증거로 찾은 식당">자동 매칭</span>` : "");
-  const kakaoDirections = (r) => `https://map.kakao.com/link/to/${encodeURIComponent(r.name)},${r.lat},${r.lon}`;
   const naverSearch = (r) => `https://map.naver.com/p/search/${encodeURIComponent(`${r.name} ${r.subregion || r.region}`)}`;
+
+  // ---------------------------------------------------------------- 길찾기 (휴대폰: 앱 바로, 없으면 웹 / PC: 웹)
+  // 카카오맵: kakaomap://route?sp=위도,경도&ep=위도,경도&by=car|publictransit|foot (KakaoMapsSDK URL Scheme 문서)
+  //           앱 없으면 모바일웹 m.map.kakao.com/scheme/route (같은 문서), PC 는 map.kakao.com/link/… (지도 웹 가이드)
+  // 네이버:   nmap://route/{public|walk|car}?dlat&dlng&dname&appname (NCP Maps URL Scheme 문서, appname 필수)
+  //           공식 웹 길찾기 URL 은 문서에 없어 앱이 없거나 PC 면 네이버지도 웹에서 그 식당을 연다
+  const ROUTE = {
+    public: { label: "대중교통", kakaoApp: "publictransit", kakaoWeb: "traffic", naver: "public" },
+    walk: { label: "도보", kakaoApp: "foot", kakaoWeb: "walk", naver: "walk" },
+    car: { label: "자동차", kakaoApp: "car", kakaoWeb: "car", naver: "car" },
+  };
+
+  function deviceKind() {
+    const ua = navigator.userAgent || "";
+    if (/Android/i.test(ua)) return "android";
+    if (/iPhone|iPad|iPod/i.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) return "ios";
+    return "pc";
+  }
+
+  function routeLinks(app, r, mode = state.routeMode, me = state.me, device = deviceKind()) {
+    const m = ROUTE[mode] || ROUTE.public;
+    const name = encodeURIComponent(r.name);
+    if (app === "kakao") {
+      const qs = (me ? `sp=${me.lat},${me.lon}&` : "") + `ep=${r.lat},${r.lon}&by=${m.kakaoApp}`;
+      const web = me
+        ? `https://map.kakao.com/link/by/${m.kakaoWeb}/${encodeURIComponent("내 위치")},${me.lat},${me.lon}/${name},${r.lat},${r.lon}`
+        : `https://map.kakao.com/link/to/${name},${r.lat},${r.lon}`;
+      const mobileWeb = me ? `http://m.map.kakao.com/scheme/route?${qs}` : web;
+      if (device === "pc") return { url: web };
+      if (device === "android") {
+        return { url: `intent://route?${qs}#Intent;scheme=kakaomap;package=net.daum.android.map;`
+                      + `S.browser_fallback_url=${encodeURIComponent(mobileWeb)};end` };
+      }
+      return { url: `kakaomap://route?${qs}`, fallback: mobileWeb };
+    }
+    const appname = encodeURIComponent(location.origin + location.pathname);   // 네이버: 호출한 사이트를 appname 으로
+    const start = me ? `slat=${me.lat}&slng=${me.lon}&sname=${encodeURIComponent("내 위치")}&` : "";
+    const qs = `${start}dlat=${r.lat}&dlng=${r.lon}&dname=${name}&appname=${appname}`;
+    const web = naverSearch(r);
+    if (device === "pc") return { url: web };
+    if (device === "android") {
+      return { url: `intent://route/${m.naver}?${qs}#Intent;scheme=nmap;action=android.intent.action.VIEW;`
+                    + `category=android.intent.category.BROWSABLE;package=com.nhn.android.nmap;`
+                    + `S.browser_fallback_url=${encodeURIComponent(web)};end` };
+    }
+    return { url: `nmap://route/${m.naver}?${qs}`, fallback: web };
+  }
+
+  function openRoute(app, r) {
+    const { url, fallback } = routeLinks(app, r);
+    if (deviceKind() === "pc") { window.open(url, "_blank", "noopener"); return; }
+    // iOS: 앱을 부르고 1.5초 뒤에도 이 화면이 보이면 앱이 없는 것 → 웹으로 (안드로이드는 intent 의 fallback 이 처리)
+    const t = Date.now();
+    location.href = url;
+    if (fallback) {
+      setTimeout(() => { if (!document.hidden && Date.now() - t < 2500) location.href = fallback; }, 1500);
+    }
+  }
 
   // ---------------------------------------------------------------- 필터
   function matchesBase(r) {
     if (state.cats.size && !state.cats.has(r.category)) return false;
+    if (state.channels.size && !r.videos.some((v) => state.channels.has(v.program))) return false;
     if (state.region) {
       const [reg, sub] = state.region.split("|");
       if (r.region !== reg) return false;
@@ -81,6 +144,7 @@
   function visible() {
     const q = state.q.trim().toLowerCase();
     let rows = state.all.filter(matchesBase);
+    if (state.subset) rows = rows.filter((r) => state.subset.has(r.id));   // 같은 건물 클러스터
     if (!state.near && q) {
       rows = rows.filter((r) => r.name.toLowerCase().includes(q) || r.address.toLowerCase().includes(q));
     }
@@ -126,6 +190,25 @@
           aria-pressed="${state.cats.has(c)}"><span class="dot"></span>${esc(c)}<span class="n">${counts[c]}</span></button>`).join("");
   }
 
+  // 채널(프로그램) 목록: 데이터에 있는 프로그램을 자동으로 (새 채널이 들어오면 저절로 생김)
+  function renderChannels() {
+    const counts = new Map();
+    for (const r of state.all) for (const p of programsOf(r)) counts.set(p, (counts.get(p) || 0) + 1);
+    const names = [...counts.keys()].sort((a, b) => counts.get(b) - counts.get(a) || a.localeCompare(b, "ko"));
+    el.channelPop.innerHTML =
+      `<button type="button" class="ch-item" data-ch="" aria-pressed="${state.channels.size === 0}">전체 채널</button>` +
+      names.map((n) => `<button type="button" class="ch-item" data-ch="${esc(n)}" aria-pressed="${state.channels.has(n)}">`
+        + `<span class="ch-check" aria-hidden="true"></span>${esc(n)}<span class="n">${counts.get(n)}</span></button>`).join("");
+    const sel = [...state.channels];
+    el.channelLabel.textContent = sel.length === 0 ? "채널" : sel.length === 1 ? sel[0] : `채널 ${sel.length}`;
+    el.channelBtn.classList.toggle("is-on", sel.length > 0);
+  }
+
+  function toggleChannelPop(open = el.channelPop.hidden) {
+    el.channelPop.hidden = !open;
+    el.channelBtn.setAttribute("aria-expanded", String(open));
+  }
+
   function renderNear() {
     const text = el.q.value.trim();
     el.qClear.hidden = !text;
@@ -152,16 +235,18 @@
         <h3>${esc(r.name)}</h3>
         <div class="meta"><span class="cat" style="--c:${COLORS[r.category] || COLORS["기타"]}">${esc(r.category)}</span>
           <span>${esc(r.hood || r.region)}</span>${dist}</div>
-        <div class="badges">${progs.map((p) => `<span class="badge">${esc(p)}</span>`).join("")}${autoBadge(r)}${
-          r.videos.length > 1 ? `<span class="badge">영상 ${r.videos.length}개</span>` : ""}</div>
+        <div class="badges">${progs.map((p) => `<span class="badge badge-prog">${esc(p)}</span>`).join("")}${autoBadge(r)}${
+          r.videos.length > 1 ? `<span class="badge-count">영상 ${r.videos.length}개</span>` : ""}</div>
       </div></li>`;
   }
 
   function render({ fit = false } = {}) {
     const rows = visible();
     el.count.textContent = rows.length;
-    el.sortLabel.textContent = state.near ? "가까운 순" : state.me ? "내 위치에서 가까운 순" : "최신 영상 순";
-    el.meRadius.hidden = !state.me || !!state.near;
+    el.sortLabel.textContent = state.subset ? "같은 위치"
+      : state.near ? "가까운 순" : state.me ? "내 위치에서 가까운 순" : "최신 영상 순";
+    el.subsetClear.hidden = !state.subset;
+    el.meRadius.hidden = !state.me || !!state.near || !!state.subset;
     el.sortLabel.hidden = !el.meRadius.hidden && MOBILE.matches;     // 모바일은 좁아서 반경 버튼만
     for (const b of el.meRadius.querySelectorAll("button")) {
       b.setAttribute("aria-checked", String(+b.dataset.km === state.meRadiusKm));
@@ -193,10 +278,15 @@
         <span>${esc(r.hood || r.region)}</span>${dist}${autoBadge(r)}</div>
       <p class="addr"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7Zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5Z"/></svg>
         <span>${esc(r.address)}</span><button type="button" class="copy" data-action="copy">복사</button></p>
-      <div class="actions">
-        ${r.lat != null ? `<a class="btn btn-kakao" href="${kakaoDirections(r)}" target="_blank" rel="noopener">카카오맵 길찾기</a>` : ""}
-        <a class="btn btn-naver" href="${naverSearch(r)}" target="_blank" rel="noopener">네이버지도</a>
+      ${r.lat != null ? `
+      <div class="route-mode" role="radiogroup" aria-label="이동수단">${Object.entries(ROUTE).map(([k, m]) =>
+        `<button type="button" data-action="mode" data-mode="${k}" aria-checked="${state.routeMode === k}">${m.label}</button>`).join("")}
       </div>
+      <div class="actions">
+        <button type="button" class="btn btn-kakao" data-action="route" data-app="kakao">카카오맵 길찾기</button>
+        <button type="button" class="btn btn-naver" data-action="route" data-app="naver">네이버지도 길찾기</button>
+      </div>` : `
+      <div class="actions"><a class="btn btn-naver" href="${naverSearch(r)}" target="_blank" rel="noopener">네이버지도에서 보기</a></div>`}
       <h4 class="section-title">나온 영상 <span class="yt">${r.videos.length}</span></h4>
       <ul class="videos">${r.videos.map((v) => `
         <li><a class="video" href="https://www.youtube.com/watch?v=${encodeURIComponent(v.id)}" target="_blank" rel="noopener">
@@ -253,6 +343,7 @@
     // 도시 단위 이상으로 멀리 볼 때만 핀을 묶는다 (동네 단위에서는 핀이 하나씩 보여야 고르기 쉽다)
     clusterer = new K.MarkerClusterer({
       map, averageCenter: true, minLevel: 8, gridSize: 56, minClusterSize: 3,
+      disableClickZoom: true,            // 기본 확대(한 단계) 대신 clusterclick 에서 직접 처리
       calculator: [10, 30],
       styles: [0, 1, 2].map((i) => ({
         width: `${40 + i * 8}px`, height: `${40 + i * 8}px`, lineHeight: `${40 + i * 8}px`,
@@ -261,6 +352,7 @@
         boxShadow: "0 2px 8px rgba(0,0,0,.25)", fontFamily: "Pretendard Variable, sans-serif",
       })),
     });
+    K.event.addListener(clusterer, "clusterclick", onClusterTap);
     // 지도 빈 곳을 탭하면 시트를 접는다. 카카오 'click' 은 터치에서 안 오는 경우가 있어
     // 지도 영역의 짧은 탭(거의 안 움직이고 0.4초 안에 뗌)을 직접 감지한다. 핀·버튼을 탭한 경우는 제외
     const collapse = () => { if (MOBILE.matches && state.sheet !== "closed") setSheet("closed"); };
@@ -282,8 +374,63 @@
     b.className = "pin";
     b.style.setProperty("--c", COLORS[r.category] || COLORS["기타"]);
     b.setAttribute("aria-label", `${r.name} (${r.category})`);
-    b.addEventListener("click", (e) => { e.stopPropagation(); openDetail(r.id, { pan: true }); });
+    b.addEventListener("click", (e) => { e.stopPropagation(); onPinTap(r); });
     return b;
+  }
+
+  // 클러스터(숫자 원) 탭: 그 구역으로 부드럽게 확대해 핀을 펼친다. 클러스터는 레벨 8 이상에서만 묶이므로
+  // 레벨 7 로 내려가면 개별 핀이 된다. 다만 모두 같은 건물(약 30m 안)이면 확대해도 핀이 겹치므로 목록으로 보여준다
+  const overlayId = new WeakMap();
+  const SAME_PLACE_DEG = 0.0003;
+  function onClusterTap(cluster) {
+    const K = kakao.maps;
+    const ids = cluster.getMarkers().map((o) => overlayId.get(o)).filter((x) => x != null);
+    const rows = state.all.filter((r) => ids.includes(r.id));
+    const lats = rows.map((r) => r.lat), lons = rows.map((r) => r.lon);
+    const samePlace = rows.length > 1 && Math.max(...lats) - Math.min(...lats) < SAME_PLACE_DEG
+      && Math.max(...lons) - Math.min(...lons) < SAME_PLACE_DEG;
+    // 목표 레벨: 클러스터 식당들이 퍼진 범위가 화면의 약 70% 를 채우는 레벨 (레벨이 1 줄면 2배 확대).
+    // 한 번에 부드럽게 그 레벨로 간다. 큰 클러스터는 작은 클러스터로 나뉘고, 작은 클러스터는 개별 핀으로 펼쳐진다
+    const level = map.getLevel();
+    let target = 3;
+    if (!samePlace) {
+      const b = map.getBounds(), sw = b.getSouthWest(), ne = b.getNorthEast();
+      const cos = Math.cos(cluster.getCenter().getLat() * Math.PI / 180);
+      const viewSpan = Math.min(ne.getLat() - sw.getLat(), (ne.getLng() - sw.getLng()) * cos);
+      const span = Math.max(Math.max(...lats) - Math.min(...lats), (Math.max(...lons) - Math.min(...lons)) * cos, 0.002);
+      const steps = Math.floor(Math.log2((viewSpan * 0.7) / span));
+      target = Math.max(1, level - Math.max(1, steps));
+    }
+    const center = new K.LatLng((Math.max(...lats) + Math.min(...lats)) / 2, (Math.max(...lons) + Math.min(...lons)) / 2);
+    map.setLevel(target, { anchor: center, animate: { duration: 400 } });
+    K.event.addListener(map, "idle", function once() {
+      K.event.removeListener(map, "idle", once);
+      map.panTo(center);                                  // 확대한 구역을 화면 가운데로
+      if (samePlace) {                                    // 최대로 확대해도 안 펼쳐짐 → 그 식당들을 시트 목록으로
+        state.subset = new Set(ids);
+        closeDetail();
+        render();
+        if (MOBILE.matches) setSheet("half");
+      }
+    });
+  }
+
+  // 핀 탭: 같은 건물(약 10m 안)에 다른 식당 핀이 겹쳐 있으면 그 식당들을 목록으로, 아니면 상세
+  function onPinTap(r) {
+    const near = [...pins.values()].map((p) => p.r)
+      .filter((x) => Math.abs(x.lat - r.lat) < SAME_PLACE_DEG / 3 && Math.abs(x.lon - r.lon) < SAME_PLACE_DEG / 3);
+    if (near.length < 2) { openDetail(r.id, { pan: true }); return; }
+    state.subset = new Set(near.map((x) => x.id));
+    closeDetail();
+    render();
+    if (MOBILE.matches) setSheet("half");
+    focusOn(r);
+  }
+
+  function clearSubset() {
+    if (!state.subset) return false;
+    state.subset = null;
+    return true;
   }
 
   function drawMarkers(rows, fit) {
@@ -299,6 +446,7 @@
       const overlay = new K.CustomOverlay({ position: new K.LatLng(r.lat, r.lon), content: node, yAnchor: 1, zIndex: 2,
                                             clickable: true });
       pins.set(r.id, { overlay, node, r });
+      overlayId.set(overlay, r.id);
       overlays.push(overlay);
     }
     clusterer.addMarkers(overlays);
@@ -504,18 +652,29 @@
     else if (map) setTimeout(() => { map.relayout(); render({ fit: true }); }, 0);
   }
 
+  // env(safe-area-inset-bottom) 값(px). 일반 브라우저에서는 0, 홈 화면 앱(아이폰)에서는 홈 표시줄 높이
+  function safeBottom() {
+    const d = document.createElement("div");
+    d.style.cssText = "position:fixed;left:0;bottom:0;width:1px;height:env(safe-area-inset-bottom);visibility:hidden";
+    document.body.appendChild(d);
+    const h = d.offsetHeight;
+    d.remove();
+    return h;
+  }
+
   function sheetGeometry() {
     const vh = window.innerHeight;
     const top = Math.round(el.topbar.getBoundingClientRect().bottom + 4);
     const h = vh - top;
     // 접힌 높이 = 손잡이 + 'N곳' 한 줄. 반경 버튼 표시 여부·상세 열림과 상관없이 늘 같은 높이
-    const closedH = el.grip.offsetHeight + 42;
+    const closedH = el.grip.offsetHeight + 42 + safeBottom();          // 홈 화면 앱: 홈 표시줄만큼 더
     return { top, offsets: { full: 0, half: Math.round(h - vh * 0.46), closed: Math.round(h - closedH) } };
   }
 
   function setSheet(name, { animate = true } = {}) {
     if (!MOBILE.matches) return;
     if (name === "closed" && state.selected != null) closeDetail();   // 상세에서 내리면 목록 바로 접힘
+    if (name === "closed" && clearSubset()) render();                  // 같은 위치 목록도 접으면 원래 목록으로
     state.sheet = name;
     el.panel.dataset.sheet = name;
     el.panel.classList.toggle("is-closed", name === "closed");
@@ -580,6 +739,7 @@
   function bind() {
     el.q.addEventListener("input", () => {
       if (state.near && el.q.value.trim() !== state.near.query) state.near = null;
+      clearSubset();
       state.q = el.q.value;
       render();
     });
@@ -611,13 +771,28 @@
       state.meRadiusKm = +b.dataset.km;
       render({ fit: true });
     });
-    el.region.addEventListener("change", () => { state.region = el.region.value; closeDetail(); render({ fit: true }); });
+    el.region.addEventListener("change", () => { state.region = el.region.value; clearSubset(); closeDetail(); render({ fit: true }); });
+    el.channelBtn.addEventListener("click", (e) => { e.stopPropagation(); toggleChannelPop(); });
+    el.channelPop.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const b = e.target.closest(".ch-item");
+      if (!b) return;
+      const c = b.dataset.ch;
+      if (!c) state.channels.clear();
+      else state.channels.has(c) ? state.channels.delete(c) : state.channels.add(c);
+      clearSubset();
+      renderChannels();
+      render({ fit: true });
+    });
+    document.addEventListener("click", (e) => { if (!e.target.closest("#channelPick")) toggleChannelPop(false); });
+    el.subsetClear.addEventListener("click", () => { clearSubset(); render(); });
     el.chips.addEventListener("click", (e) => {
       const b = e.target.closest(".chip");
       if (!b) return;
       const c = b.dataset.cat;
       if (!c) state.cats.clear();
       else state.cats.has(c) ? state.cats.delete(c) : state.cats.add(c);
+      clearSubset();
       render({ fit: true });
     });
     el.viewSeg.addEventListener("click", (e) => {
@@ -636,6 +811,14 @@
       const a = e.target.closest("[data-action]");
       if (!a) return;
       if (a.dataset.action === "back") closeDetail();
+      if (a.dataset.action === "mode") {
+        state.routeMode = a.dataset.mode;
+        for (const b of el.detail.querySelectorAll("[data-action=mode]")) b.setAttribute("aria-checked", String(b === a));
+      }
+      if (a.dataset.action === "route") {
+        const r = state.all.find((x) => x.id === state.selected);
+        if (r) openRoute(a.dataset.app, r);
+      }
       if (a.dataset.action === "copy") {
         const r = state.all.find((x) => x.id === state.selected);
         try { await navigator.clipboard.writeText(r.address); a.textContent = "복사됨"; } catch { a.textContent = "복사 실패"; }
@@ -685,6 +868,11 @@
     render();
 
     // 처음 열 때 위치 권한 요청 (지도 로딩과 동시에). 허용하면 가까운 순 + 지도를 내 위치로
+    renderChannels();
+    // 홈 화면 앱: 서비스 워커 등록 (네트워크 우선, 오프라인일 때만 캐시 — sw.js)
+    if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
+      navigator.serviceWorker.register("sw.js").catch(() => {});
+    }
     locate();
 
     try {
@@ -699,5 +887,6 @@
     }
   }
 
+  window.matjipDebug = { state, routeLinks, level: () => map?.getLevel() };
   main();
 })();

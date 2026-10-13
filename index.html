@@ -5,10 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#ffffff">
   <title>유튜브 맛집 지도</title>
+  <!-- 홈 화면 앱 (PWA) -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="맛집지도">
+  <!-- 상태바 위로 화면을 깐다 → 상단 검색창은 env(safe-area-inset-top) 만큼 내려서 가리지 않게 (style.css) -->
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
   <link rel="stylesheet" href="css/style.css">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%23ff5a1f'/%3E%3Cpath fill='%23fff' d='M16 6a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7Zm0 9.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5Z'/%3E%3C/svg%3E">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
 </head>
 <body>
   <div class="app" id="app" data-view="map">
@@ -57,6 +65,14 @@
           <select id="region"></select>
           <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="m6 9 6 6 6-6"/></svg>
         </label>
+        <!-- 채널(유튜버) 여러 개 선택: 데이터에 있는 프로그램으로 자동 목록화 -->
+        <div class="channel-pick" id="channelPick">
+          <button type="button" class="pill-btn" id="channelBtn" aria-haspopup="true" aria-expanded="false">
+            <span id="channelLabel">채널</span>
+            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="m6 9 6 6 6-6"/></svg>
+          </button>
+          <div class="channel-pop" id="channelPop" role="group" aria-label="채널" hidden></div>
+        </div>
         <div class="chips" id="chips" role="group" aria-label="음식 종류"></div>
         <div class="seg" id="viewSeg" role="tablist" aria-label="보기">
           <button type="button" data-view="map" role="tab">지도</button>
@@ -71,10 +87,12 @@
       <div class="list-meta" id="listMeta">
         <span><b id="count">0</b>곳</span>
         <span class="sort" id="sortLabel">최신 영상 순</span>
+        <button type="button" class="subset-clear" id="subsetClear" hidden>전체 보기</button>
         <div class="me-radius" id="meRadius" role="radiogroup" aria-label="내 위치 주변 반경" hidden>
           <button type="button" data-km="1">1km</button>
           <button type="button" data-km="3">3km</button>
           <button type="button" data-km="5">5km</button>
+          <button type="button" data-km="10">10km</button>
           <button type="button" data-km="0">전체</button>
         </div>
       </div>
