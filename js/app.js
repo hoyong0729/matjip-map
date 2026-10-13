@@ -29,7 +29,9 @@
     meRadiusKm: 0,       // 0 = 전체 (가까운 순 정렬만)
     geoNoticeShown: false,
     selected: null,
-    sheet: "half",       // 모바일 시트: peek / half / full
+    // 모바일 시트: closed(손잡이와 'N곳' 한 줄만) / half / full.
+    // 사용자가 접으면 그대로 둔다. 다시 여는 건 ① 핀 탭(상세 반만) ② 접힌 바 탭·끌어올리기 ③ 검색 실행 뿐
+    sheet: "closed",
   };
 
   const el = {
@@ -52,6 +54,9 @@
   const fmtDist = (km) => (km < 1 ? `${Math.round(km * 1000 / 10) * 10}m` : `${km.toFixed(1)}km`);
   const programsOf = (r) => [...new Set(r.videos.map((v) => v.program).filter(Boolean))];
   const latestDate = (r) => r.videos.reduce((m, v) => (v.date > m ? v.date : m), "");
+  // 설명란에서 확정한 식당(먹을텐데 등)과 구분: 여러 증거로 자동 매칭한 식당에만 작은 배지
+  const autoBadge = (r) => (r.source === "자동매칭"
+    ? `<span class="badge badge-auto" title="설명란에 주소가 없어 블로그·카카오 장소 검색 증거로 찾은 식당">자동 매칭</span>` : "");
   const kakaoDirections = (r) => `https://map.kakao.com/link/to/${encodeURIComponent(r.name)},${r.lat},${r.lon}`;
   const naverSearch = (r) => `https://map.naver.com/p/search/${encodeURIComponent(`${r.name} ${r.subregion || r.region}`)}`;
 
@@ -147,7 +152,7 @@
         <h3>${esc(r.name)}</h3>
         <div class="meta"><span class="cat" style="--c:${COLORS[r.category] || COLORS["기타"]}">${esc(r.category)}</span>
           <span>${esc(r.hood || r.region)}</span>${dist}</div>
-        <div class="badges">${progs.map((p) => `<span class="badge">${esc(p)}</span>`).join("")}${
+        <div class="badges">${progs.map((p) => `<span class="badge">${esc(p)}</span>`).join("")}${autoBadge(r)}${
           r.videos.length > 1 ? `<span class="badge">영상 ${r.videos.length}개</span>` : ""}</div>
       </div></li>`;
   }
@@ -185,7 +190,7 @@
       <div class="hero"><img src="${esc(r.videos[0] ? ytThumb(r.videos[0].id) : r.thumb)}" alt=""></div>
       <h2>${esc(r.name)}</h2>
       <div class="meta"><span class="cat" style="--c:${COLORS[r.category] || COLORS["기타"]}">${esc(r.category)}</span>
-        <span>${esc(r.hood || r.region)}</span>${dist}</div>
+        <span>${esc(r.hood || r.region)}</span>${dist}${autoBadge(r)}</div>
       <p class="addr"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7Zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5Z"/></svg>
         <span>${esc(r.address)}</span><button type="button" class="copy" data-action="copy">복사</button></p>
       <div class="actions">
@@ -256,7 +261,19 @@
         boxShadow: "0 2px 8px rgba(0,0,0,.25)", fontFamily: "Pretendard Variable, sans-serif",
       })),
     });
-    K.event.addListener(map, "click", () => { if (MOBILE.matches && state.sheet !== "peek") setSheet("peek"); });
+    // 지도 빈 곳을 탭하면 시트를 접는다. 카카오 'click' 은 터치에서 안 오는 경우가 있어
+    // 지도 영역의 짧은 탭(거의 안 움직이고 0.4초 안에 뗌)을 직접 감지한다. 핀·버튼을 탭한 경우는 제외
+    const collapse = () => { if (MOBILE.matches && state.sheet !== "closed") setSheet("closed"); };
+    K.event.addListener(map, "click", collapse);
+    const mapEl = document.getElementById("map");
+    let down = null;
+    mapEl.addEventListener("pointerdown", (e) => { down = { x: e.clientX, y: e.clientY, t: Date.now() }; }, true);
+    mapEl.addEventListener("pointerup", (e) => {
+      if (!down) return;
+      const tap = Math.hypot(e.clientX - down.x, e.clientY - down.y) < 8 && Date.now() - down.t < 400;
+      down = null;
+      if (tap && !e.target.closest(".pin, .pin-label, .me-dot, .here, button")) collapse();
+    }, true);
   }
 
   function pinNode(r) {
@@ -278,7 +295,9 @@
     for (const r of rows) {
       if (r.lat == null) continue;
       const node = pinNode(r);
-      const overlay = new K.CustomOverlay({ position: new K.LatLng(r.lat, r.lon), content: node, yAnchor: 1, zIndex: 2 });
+      // clickable: 핀을 탭해도 지도 'click'(빈 곳 탭 → 시트 접기)이 함께 일어나지 않게
+      const overlay = new K.CustomOverlay({ position: new K.LatLng(r.lat, r.lon), content: node, yAnchor: 1, zIndex: 2,
+                                            clickable: true });
       pins.set(r.id, { overlay, node, r });
       overlays.push(overlay);
     }
@@ -481,7 +500,7 @@
     state.view = view;
     el.app.dataset.view = view;
     for (const b of el.viewSeg.querySelectorAll("button")) b.setAttribute("aria-selected", String(b.dataset.view === view));
-    if (MOBILE.matches) setSheet(view === "list" ? "full" : "peek");
+    if (MOBILE.matches) setSheet(view === "list" ? "full" : "closed");
     else if (map) setTimeout(() => { map.relayout(); render({ fit: true }); }, 0);
   }
 
@@ -489,12 +508,17 @@
     const vh = window.innerHeight;
     const top = Math.round(el.topbar.getBoundingClientRect().bottom + 4);
     const h = vh - top;
-    return { top, offsets: { full: 0, half: Math.round(h - vh * 0.46), peek: Math.round(h - 168) } };
+    // 접힌 높이 = 손잡이 + 'N곳' 한 줄. 반경 버튼 표시 여부·상세 열림과 상관없이 늘 같은 높이
+    const closedH = el.grip.offsetHeight + 42;
+    return { top, offsets: { full: 0, half: Math.round(h - vh * 0.46), closed: Math.round(h - closedH) } };
   }
 
   function setSheet(name, { animate = true } = {}) {
     if (!MOBILE.matches) return;
+    if (name === "closed" && state.selected != null) closeDetail();   // 상세에서 내리면 목록 바로 접힘
     state.sheet = name;
+    el.panel.dataset.sheet = name;
+    el.panel.classList.toggle("is-closed", name === "closed");
     const g = sheetGeometry();
     el.panel.classList.toggle("dragging", !animate);
     el.app.style.setProperty("--sheet-top", `${g.top}px`);
@@ -531,11 +555,17 @@
       el.panel.classList.remove("dragging");
       const g = sheetGeometry();
       const y = startOffset + (e.clientY - startY);
-      if (!moved) {                       // 손잡이를 탭하면 한 단계씩
-        setSheet(state.sheet === "peek" ? "half" : state.sheet === "half" ? "full" : "half");
+      if (!moved) {                       // 탭: 접힘 → 반 → 전체 → 반
+        setSheet(state.sheet === "closed" ? "half" : state.sheet === "half" ? "full" : "half");
         return;
       }
-      const nearest = Object.entries(g.offsets).sort((a, b) => Math.abs(a[1] - y) - Math.abs(b[1] - y))[0][0];
+      // 끈 방향의 가장 가까운 단계로 (조금만 내려도 다음 단계로 내려가게)
+      const dy = e.clientY - startY;
+      const order = ["full", "half", "closed"];
+      const i = order.indexOf(state.sheet);
+      const candidates = Math.abs(dy) < 40 ? [state.sheet]
+        : dy > 0 ? order.slice(Math.min(i + 1, 2)) : order.slice(0, Math.max(i, 1));
+      const nearest = candidates.sort((a, b) => Math.abs(g.offsets[a] - y) - Math.abs(g.offsets[b] - y))[0];
       setSheet(nearest);
     };
     for (const h of [el.grip, el.listMeta]) {
@@ -558,8 +588,12 @@
       const text = el.q.value.trim();
       if (!text) return;
       // 상호·주소로 걸리는 식당이 없으면 장소로 보고 주변을 찾는다
-      if (visible().length === 0 && mapReady()) startNear(text);
-      else { el.q.blur(); render({ fit: true }); }
+      if (visible().length === 0 && mapReady()) startNear(text);           // 장소 주변 찾기 (시트를 연다)
+      else {
+        el.q.blur();
+        render({ fit: true });
+        if (MOBILE.matches) setSheet("half");                               // 검색 실행 → 결과 목록
+      }
     });
     el.qClear.addEventListener("click", () => { el.q.value = ""; state.q = ""; state.near = null; render({ fit: true }); el.q.focus(); });
     el.nearSuggest.addEventListener("click", () => startNear(el.q.value));
@@ -612,7 +646,7 @@
     window.addEventListener("resize", () => { if (MOBILE.matches) setSheet(state.sheet, { animate: false }); map?.relayout(); });
     MOBILE.addEventListener("change", () => {
       el.app.style.removeProperty("--sheet-y");
-      if (MOBILE.matches) setSheet("peek", { animate: false });
+      if (MOBILE.matches) setSheet("closed", { animate: false });
       setTimeout(() => { map?.relayout(); render({ fit: true }); }, 50);
     });
     enableSheetDrag();
@@ -627,8 +661,8 @@
   async function main() {
     bind();
     setView("map");
-    // 모바일 첫 화면은 지도가 주인공: 시트는 접어 두고(목록 2~3줄만) 끌어올려서 본다
-    if (MOBILE.matches) setSheet("peek", { animate: false });
+    // 모바일 첫 화면은 지도가 주인공: 시트는 접힌 바(손잡이 + 'N곳')로 시작
+    if (MOBILE.matches) setSheet("closed", { animate: false });
     let data;
     try {
       const res = await fetch("data/restaurants.json", { cache: "no-cache" });

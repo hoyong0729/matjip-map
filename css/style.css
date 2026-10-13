@@ -232,6 +232,7 @@ a { color: inherit; text-decoration: none; }
   font-size: 11.5px; font-weight: 600; color: var(--ink-2); background: #fff;
 }
 
+.badge-auto { border-color: #c9d8ff; background: #f2f6ff; color: #3159c9; }
 .empty { text-align: center; padding: 48px 16px; }
 .empty-title { margin: 0 0 4px; font-weight: 700; }
 .empty-sub { margin: 0; color: var(--ink-3); font-size: 14px; }
@@ -409,6 +410,10 @@ a { color: inherit; text-decoration: none; }
     will-change: transform;
   }
   .panel.dragging { transition: none; }
+  /* 접힌 바: 손잡이와 'N곳' 한 줄만 (반경 버튼·정렬 문구는 숨김) */
+  .panel.is-closed .me-radius, .panel.is-closed .sort { display: none !important; }
+  .panel.is-closed .list-meta { cursor: pointer; }
+  .panel.is-closed:not(.dragging) .scroll { visibility: hidden; }   /* 접힌 바 아래로 첫 카드가 비치지 않게 */
   .sheet-grip { display: grid; place-items: center; height: 22px; flex: none; cursor: grab; touch-action: none; }
   .sheet-grip span { width: 40px; height: 5px; border-radius: 3px; background: #d4d8dd; }
   .list-meta { padding: 0 16px 8px; touch-action: none; }
