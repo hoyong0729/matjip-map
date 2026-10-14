@@ -364,7 +364,8 @@
   function initMap() {
     const K = kakao.maps;
     map = new K.Map(document.getElementById("map"), { center: new K.LatLng(36.4, 127.8), level: 12 });
-    map.setMaxLevel(13);
+    map.setMaxLevel(MAX_LEVEL);                         // 핀치·휠·버튼·지역 맞춤 모두 이 레벨까지 (남한 전체가 들어오는 레벨)
+    keepInKorea();
     // 확대/축소: 기본 컨트롤 대신 화면 디자인에 맞춘 버튼 (모바일은 두 손가락으로)
     const zoom = document.getElementById("zoom");
     zoom.hidden = false;
@@ -411,9 +412,59 @@
   //    끄는 동안은 CSS translate+scale 로 손가락을 따라가고, 놓으면 목표 배율까지 0.2초 애니메이션 뒤 setLevel(anchor) +
   //    setCenter 로 같은 자리에 맞춘다 (레벨 1 = 2배라 배율이 딱 맞아 끊김 없음)
   // 한 손가락 이동·묶음 핀 탭은 카카오 그대로. 기본 줌을 끄면 두 번 탭 확대도 꺼지므로 그것도 직접(1단계 확대)
+  // 최대 축소 13: 휴대폰(390x844)·PC(1280x800) 모두 남한 전체(제주 포함)가 들어오는 가장 가까운 레벨 (2026-10-14 측정 —
+  // 12 는 휴대폰 위도 33.9~37.8·PC 34.0~37.7 만 보여 제주·강원 북부가 잘림). 북한은 아래 keepInKorea 로 덜 보이게
   const MIN_LEVEL = 1, MAX_LEVEL = 13, PINCH_MAX_STEPS = 4, PINCH_MAX_IN = 2;
+
   const PINCH_MIN = 0.12;             // 이보다 작은 변화(간격 약 8% 이하)는 손떨림으로 보고 무시
   const PINCH_FAST = [2.5, 5];        // 축소 빠르기(초당 log2 비율): 2.5 이상 +1, 5 이상 +2 (반으로 0.4초 / 0.2초)
+
+  // 남한 범위 (제주·마라도, 백령도, 울릉도·독도(동경 131.87) 포함). 화면이 이 밖으로 나가면 손을 뗀 뒤(idle) 부드럽게 되돌린다.
+  // 중심만 보지 않고 화면 가장자리를 본다: 화면이 범위보다 좁으면 가장자리가 범위 안에 있게.
+  // 화면이 범위보다 넓으면(최대 축소) 북쪽 끝을 화면 위쪽(가리는 것 아래)에 맞춘다 — 남는 공간은 남쪽 바다로 (북한이 덜 보임).
+  // 그래도 가리지 않는 부분에 다 안 들어가면(휴대폰) 그 부분의 가운데에
+  const KOREA = { s: 33.0, n: 38.7, w: 124.5, e: 132.0 };
+  // 최대 축소(MAX_LEVEL)에서는 본토(백령도~포항, 제주~고성) 기준: 휴대폰은 경도 폭이 4.7도라 넓은 범위 안에서 동쪽으로
+  // 치우치면 서울·인천이 잘렸다 → 본토 범위로 가운데 맞춤. 울릉도·독도는 한 단계 확대해서 본다
+  const KOREA_MAINLAND = { s: 33.0, n: 38.7, w: 125.9, e: 129.7 };
+  const CLAMP_TOL = 0.01;             // 약 1km 이하로 넘친 것은 그대로 (되돌린 뒤 다시 조금씩 움직이는 것 방지)
+
+  // view = { s, n, w, e, lat, lng } (지금 화면 경계와 지도 중심), pad = 화면 위·아래를 가리는 비율 → 옮길 중심 [lat, lng], 그대로면 null.
+  // 지도 중심 기준으로 옮긴다 (메르카토르라 위·아래 위도의 평균은 실제 중심보다 남쪽 — 평균 기준이면 0.1도씩 어긋났다)
+  function clampCenter(view, box = KOREA, pad = { top: 0, bottom: 0 }) {
+    const span = view.n - view.s;
+    let dLat = 0;
+    if (span >= box.n - box.s) {
+      const top = view.n - pad.top * span, bottom = view.s + pad.bottom * span;     // 가리지 않는 부분
+      dLat = top - bottom >= box.n - box.s ? box.n - top : (box.s + box.n) / 2 - (top + bottom) / 2;
+    } else if (view.n > box.n) dLat = box.n - view.n;
+    else if (view.s < box.s) dLat = box.s - view.s;
+    let dLng = 0;
+    if (view.e - view.w >= box.e - box.w) dLng = (box.w + box.e) / 2 - (view.w + view.e) / 2;
+    else if (view.e > box.e) dLng = box.e - view.e;
+    else if (view.w < box.w) dLng = box.w - view.w;
+    if (Math.abs(dLat) <= CLAMP_TOL && Math.abs(dLng) <= CLAMP_TOL) return null;
+    return [(view.lat ?? (view.s + view.n) / 2) + dLat, (view.lng ?? (view.w + view.e) / 2) + dLng];
+  }
+
+  function keepInKorea() {
+    const K = kakao.maps;
+    const mapEl = document.getElementById("map");
+    // 휴대폰: 위 검색창·칩, 아래 접힌 시트 높이 (시트가 열려 있어도 접힌 높이로 — 시트를 열고 닫을 때 지도가 따라 움직이지 않게)
+    const pads = () => {
+      if (!MOBILE.matches) return { top: 0, bottom: 0 };
+      const h = mapEl.clientHeight || window.innerHeight;
+      const top = el.topbar.getBoundingClientRect().bottom + 8;
+      const bottom = Math.min(window.innerHeight - el.panel.getBoundingClientRect().top, 120) + 8;
+      return { top: Math.max(0, top) / h, bottom: Math.max(0, bottom) / h };
+    };
+    K.event.addListener(map, "idle", () => {             // idle = 끌기·확대·애니메이션이 끝난 뒤 (끄는 중에는 안 옴)
+      const b = map.getBounds(), sw = b.getSouthWest(), ne = b.getNorthEast(), c = map.getCenter();
+      const to = clampCenter({ s: sw.getLat(), n: ne.getLat(), w: sw.getLng(), e: ne.getLng(), lat: c.getLat(), lng: c.getLng() },
+                             map.getLevel() >= MAX_LEVEL ? KOREA_MAINLAND : KOREA, pads());
+      if (to) map.panTo(new K.LatLng(to[0], to[1]));
+    });
+  }
 
   function pinchSteps(ratio, seconds) {
     const raw = Math.log2(ratio);                     // 오므리면 + (축소), 벌리면 - (확대)
@@ -1197,6 +1248,6 @@
     }
   }
 
-  window.matjipDebug = { state, routeLinks, visitsRange, level: () => map?.getLevel(), get map() { return map; } };
+  window.matjipDebug = { state, routeLinks, visitsRange, clampCenter, KOREA, level: () => map?.getLevel(), get map() { return map; } };
   main();
 })();
