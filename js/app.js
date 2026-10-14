@@ -13,6 +13,7 @@
   };
   const MOBILE = window.matchMedia("(max-width: 768px)");
   const CREDIT = "개발자 유니주니 · 후원 강남오빠(안호성)";   // 제작자 표시 (index.html 의 PC 패널 문구와 같게)
+  const ABOUT_LINK = `<a class="about-link" href="about.html">이용 안내</a>`;   // 이용 안내(개인정보·출처·정정 요청) 페이지
   // 터치 기기 (휴대폰·태블릿·터치 노트북): 핀치를 직접 처리 (enablePinchZoom)
   const COARSE = { matches: window.matchMedia("(pointer: coarse)").matches || navigator.maxTouchPoints > 0 };
   const $ = (id) => document.getElementById(id);
@@ -88,10 +89,12 @@
   const naverSearch = (r) => `https://map.naver.com/p/search/${encodeURIComponent(`${r.name} ${r.subregion || r.region}`)}`;
 
   // ---------------------------------------------------------------- 길찾기 (휴대폰: 앱 바로, 없으면 웹 / PC: 웹)
-  // 카카오맵: kakaomap://route?sp=위도,경도&ep=위도,경도&by=car|publictransit|foot (KakaoMapsSDK URL Scheme 문서)
-  //           앱 없으면 모바일웹 m.map.kakao.com/scheme/route (같은 문서), PC 는 map.kakao.com/link/… (지도 웹 가이드)
+  // 카카오맵: kakaomap://route?ep=위도,경도&by=car|publictransit|foot (KakaoMapsSDK URL Scheme 문서)
+  //           앱 없으면·PC 는 map.kakao.com/link/to/… (지도 웹 가이드)
   // 네이버:   nmap://route/{public|walk|car}?dlat&dlng&dname&appname (NCP Maps URL Scheme 문서, appname 필수)
   //           공식 웹 길찾기 URL 은 문서에 없어 앱이 없거나 PC 면 네이버지도 웹에서 그 식당을 연다
+  // '내 위치' 좌표는 링크에 넣지 않는다 (2026-10-14 개인정보 점검: sp=·slat= 로 기기 밖에 나가던 경로).
+  // 출발지를 비우면 카카오맵·네이버지도 앱이 각자 현재 위치를 출발지로 쓴다
   const ROUTE = {
     public: { label: "대중교통", kakaoApp: "publictransit", kakaoWeb: "traffic", naver: "public" },
     walk: { label: "도보", kakaoApp: "foot", kakaoWeb: "walk", naver: "walk" },
@@ -105,25 +108,21 @@
     return "pc";
   }
 
-  function routeLinks(app, r, mode = state.routeMode, me = state.me, device = deviceKind()) {
+  function routeLinks(app, r, mode = state.routeMode, device = deviceKind()) {
     const m = ROUTE[mode] || ROUTE.public;
     const name = encodeURIComponent(r.name);
     if (app === "kakao") {
-      const qs = (me ? `sp=${me.lat},${me.lon}&` : "") + `ep=${r.lat},${r.lon}&by=${m.kakaoApp}`;
-      const web = me
-        ? `https://map.kakao.com/link/by/${m.kakaoWeb}/${encodeURIComponent("내 위치")},${me.lat},${me.lon}/${name},${r.lat},${r.lon}`
-        : `https://map.kakao.com/link/to/${name},${r.lat},${r.lon}`;
-      const mobileWeb = me ? `http://m.map.kakao.com/scheme/route?${qs}` : web;
+      const qs = `ep=${r.lat},${r.lon}&by=${m.kakaoApp}`;
+      const web = `https://map.kakao.com/link/to/${name},${r.lat},${r.lon}`;
       if (device === "pc") return { url: web };
       if (device === "android") {
         return { url: `intent://route?${qs}#Intent;scheme=kakaomap;package=net.daum.android.map;`
-                      + `S.browser_fallback_url=${encodeURIComponent(mobileWeb)};end` };
+                      + `S.browser_fallback_url=${encodeURIComponent(web)};end` };
       }
-      return { url: `kakaomap://route?${qs}`, fallback: mobileWeb };
+      return { url: `kakaomap://route?${qs}`, fallback: web };
     }
     const appname = encodeURIComponent(location.origin + location.pathname);   // 네이버: 호출한 사이트를 appname 으로
-    const start = me ? `slat=${me.lat}&slng=${me.lon}&sname=${encodeURIComponent("내 위치")}&` : "";
-    const qs = `${start}dlat=${r.lat}&dlng=${r.lon}&dname=${name}&appname=${appname}`;
+    const qs = `dlat=${r.lat}&dlng=${r.lon}&dname=${name}&appname=${appname}`;
     const web = naverSearch(r);
     if (device === "pc") return { url: web };
     if (device === "android") {
@@ -314,8 +313,10 @@
       <ul class="videos">${r.videos.map((v) => `
         <li><a class="video" href="https://www.youtube.com/watch?v=${encodeURIComponent(v.id)}" target="_blank" rel="noopener">
           <div class="thumb"><img loading="lazy" src="${ytThumb(v.id)}" alt=""></div>
-          <div><b>${esc(v.title)}</b><span>${esc(videoSource(v))} · ${esc(v.date)}${v.views ? ` · 조회수 ${fmtViews(v.views)}` : ""}${v.ad ? ` ${adBadge(v.ad)}` : ""}</span></div></a></li>`).join("")}
+          <div><b>${esc(v.title)}</b><span>${esc(videoSource(v))} · ${esc(v.date)}${v.views ? ` · 조회수 ${fmtViews(v.views)}` : ""}${v.ad ? ` ${adBadge(v.ad)}` : ""}</span>${
+            v.ad && v.ad_note ? `<span class="ad-note">설명란 표기: “${esc(v.ad_note)}”</span>` : ""}</div></a></li>`).join("")}
       </ul>
+      <p class="yt-source">영상·썸네일·조회수 출처: <a href="https://www.youtube.com" target="_blank" rel="noopener">YouTube</a> · 영상을 누르면 YouTube 에서 열립니다</p>
       <div class="route-bar">${r.lat != null ? `
       <div class="route-mode" role="radiogroup" aria-label="이동수단">${Object.entries(ROUTE).map(([k, m]) =>
         `<button type="button" data-action="mode" data-mode="${k}" aria-checked="${state.routeMode === k}">${m.label}</button>`).join("")}
@@ -1221,7 +1222,7 @@
       const [d, t] = data.updated_at.split(" ");
       const [, m, day] = d.split("-");
       el.updated.innerHTML = `<span class="upd-main">마지막 업데이트 <b>${+m}/${+day} ${esc(t || "")}</b></span>`
-        + `<span class="credit credit-pill">${CREDIT}</span>`;           // 휴대폰: 둘째 줄 제작자 표시
+        + `<span class="credit credit-pill">${CREDIT} · ${ABOUT_LINK}</span>`;   // 휴대폰: 둘째 줄 제작자 표시 + 이용 안내
     } else el.updated.hidden = true;
     renderRegionOptions();
     renderChips();

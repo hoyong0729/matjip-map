@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#ffffff">
+  <title>이용 안내 - 맛도리</title>
+  <meta name="description" content="맛도리 이용 안내: 개인정보 처리, YouTube API 서비스 사용, 정보 출처, 정정·삭제 요청">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+  <!-- 이용 안내 (개인정보 처리방침 겸). 근거 문서 (2026-10-14 확인):
+       YouTube API Services Developer Policies III.A.1·III.A.2 (약관 링크, 개인정보처리방침 필수 내용),
+       III.E.4 (저장·갱신), III.F.2 (출처 표시) — https://developers.google.com/youtube/terms/developer-policies
+       이 페이지에는 방문 통계 스크립트를 넣지 않는다. -->
+  <style>
+    :root { --ink: #191b1f; --ink-2: #4b5059; --ink-3: #8a909a; --line: #e8eaee; --bg: #ffffff; --bg-2: #f6f7f9; --accent: #ff5a1f; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.7 "Pretendard Variable", Pretendard, system-ui, sans-serif;
+           -webkit-text-size-adjust: 100%; word-break: keep-all; overflow-wrap: anywhere; }
+    main { max-width: 720px; margin: 0 auto; padding: 20px 16px 48px; }
+    .top { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+    .top a { color: var(--ink-2); text-decoration: none; font-size: 14px; }
+    .brand { color: var(--accent); font-weight: 800; }
+    h1 { font-size: 24px; margin: 8px 0 4px; letter-spacing: -.02em; }
+    .date { color: var(--ink-3); font-size: 13px; margin: 0 0 20px; }
+    h2 { font-size: 17px; margin: 28px 0 8px; padding-top: 16px; border-top: 1px solid var(--line); }
+    p, li { color: var(--ink-2); }
+    ul { padding-left: 20px; margin: 6px 0; }
+    li { margin: 3px 0; }
+    a { color: #1a5fd0; }
+    .box { background: var(--bg-2); border-radius: 12px; padding: 12px 14px; margin: 10px 0; }
+    code { font-size: 13px; background: var(--bg-2); padding: 1px 5px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+<main>
+  <div class="top"><a href="./">‹ 지도로 돌아가기</a></div>
+  <h1><span class="brand">맛도리</span> 이용 안내</h1>
+  <p class="date">2026년 10월 14일부터 적용</p>
+
+  <div class="box">맛도리는 유튜버가 다녀간 맛집을 지도에서 찾아보는 개인 비영리 사이트입니다.
+    회원가입·로그인이 없고, 이름·연락처 같은 개인정보를 받지 않습니다.</div>
+
+  <h2>YouTube API 서비스 사용</h2>
+  <p>맛도리는 <b>YouTube API 서비스</b>를 사용해 공개된 영상의 제목·설명·썸네일·조회수를 가져옵니다.
+    맛도리를 이용하면 YouTube 서비스 약관에 동의하는 것으로 봅니다.</p>
+  <ul>
+    <li><a href="https://www.youtube.com/t/terms" target="_blank" rel="noopener">YouTube 서비스 약관</a></li>
+    <li><a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google 개인정보처리방침</a></li>
+  </ul>
+  <p>영상 정보는 매일 YouTube 에서 다시 받아 갱신하고, 삭제·비공개된 영상은 지웁니다.
+    영상과 썸네일을 누르면 YouTube 에서 열립니다. 맛도리는 YouTube 계정 정보에 접근하지 않습니다.</p>
+
+  <h2>수집하는 정보</h2>
+  <p>방문 통계 하나뿐입니다. <a href="https://www.goatcounter.com" target="_blank" rel="noopener">GoatCounter</a> 로
+    페이지 방문 수를 셉니다.</p>
+  <ul>
+    <li>쿠키를 쓰지 않습니다. IP 주소는 저장되지 않습니다 (국가를 알아내는 데만 쓰고 버림).</li>
+    <li>남는 것은 집계 정보입니다: 방문한 페이지 주소, 브라우저·운영체제 종류, 화면 크기, 국가, 들어온 경로(참조 사이트).</li>
+    <li>자세한 내용: <a href="https://www.goatcounter.com/help/privacy" target="_blank" rel="noopener">GoatCounter 개인정보 안내</a></li>
+  </ul>
+  <p>방문 통계 외에 개인을 알아볼 수 있는 정보를 모으거나 다른 곳에 넘기지 않습니다. 광고를 싣지 않습니다.</p>
+
+  <h2>내 위치</h2>
+  <p>‘내 위치’ 버튼을 누르면 브라우저가 위치 사용을 묻습니다. 허용하면 위치는 <b>이 기기 안에서만</b>
+    가까운 순 정렬·거리 표시·지도 이동에 쓰이고, 저장하거나 맛도리·방문 통계 서버로 보내지 않습니다.
+    길찾기 버튼도 내 위치 좌표를 넘기지 않습니다 (카카오맵·네이버지도 앱이 각자 현재 위치를 출발지로 씁니다).</p>
+  <p>다만 지도를 그리기 위해 화면에 보이는 지역의 지도 이미지는 카카오 지도 서버에서 받아옵니다.</p>
+
+  <h2>기기에 저장하는 것</h2>
+  <p>홈 화면 설치 안내를 다시 띄우지 않기 위한 값 두 개만 이 기기의 브라우저 저장소(localStorage)에 둡니다:
+    <code>matjip-installed</code> (설치했는지), <code>matjip-install-dismissed</code> (안내를 닫은 시각).
+    브라우저 설정에서 사이트 데이터를 지우면 사라집니다.</p>
+
+  <h2>함께 쓰는 외부 서비스</h2>
+  <p>화면을 보여 주는 동안 브라우저가 아래 서비스에 직접 요청을 보냅니다. 각 서비스는 자체 정책에 따라 접속 기록(IP 등)을 처리할 수 있습니다.</p>
+  <ul>
+    <li>카카오 지도 (지도·장소 검색) — <a href="https://www.kakao.com/policy/privacy" target="_blank" rel="noopener">카카오 개인정보처리방침</a></li>
+    <li>YouTube (썸네일 이미지) — Google 개인정보처리방침</li>
+    <li>GoatCounter (방문 통계), jsDelivr (글꼴), GitHub Pages (사이트 호스팅)</li>
+  </ul>
+
+  <h2>가게 정보에 대해</h2>
+  <ul>
+    <li>가게 이름·주소는 유튜브 영상 설명란 등 <b>공개된 정보</b>를 바탕으로 자동으로 정리했고, 카카오 지도로 위치를 확인했습니다.
+      <b>실제와 다를 수 있습니다</b> (폐업·이전·영업시간 변경 등). 방문 전에 확인해 주세요.</li>
+    <li>‘광고 영상’·‘지원 영상’ 표시는 영상 설명란의 유료광고·협찬·제작지원 표기를 보고 붙인 것이며, 상세 화면에서 설명란 원문을 볼 수 있습니다.</li>
+    <li>맛도리는 유튜버·방송사·가게와 관계없는 개인 사이트입니다. 영상과 썸네일의 권리는 각 채널과 YouTube 에 있습니다.</li>
+    <li>일부 위치 좌표: © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> 기여자 (ODbL).</li>
+  </ul>
+
+  <h2>정정·삭제 요청</h2>
+  <p>가게 정보가 틀렸거나, 가게·채널 운영자로서 목록에서 빼기를 원하시면 아래로 알려 주세요.
+    YouTube 에서 받은 정보의 삭제 요청은 7일 안에 처리합니다.</p>
+  <p class="box">이메일: <a href="mailto:hoyong0729@gmail.com">hoyong0729@gmail.com</a></p>
+
+  <p class="date" style="margin-top:32px">개발자 유니주니 · 후원 강남오빠(안호성)</p>
+</main>
+</body>
+</html>
