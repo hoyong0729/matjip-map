@@ -73,6 +73,9 @@
   const AD_TITLE = { "지원": "지자체·기관의 지원을 받아 만든 영상", "광고": "업체의 유료광고·협찬이 포함된 영상" };
   const adBadge = (k) => `<span class="badge badge-ad" title="${AD_TITLE[k]}">${AD_LABEL[k]}</span>`;
   const adBadges = (r) => ["지원", "광고"].filter((k) => r.videos.some((v) => v.ad === k)).map(adBadge).join("");
+  // 상세의 상호명 → 네이버 검색(예약·메뉴). 검색어는 '구 이름 + 상호명' ('안양시 만안구' 면 '만안구')
+  const guName = (r) => (r.subregion || "").split(" ").filter((t) => /[구시군]$/.test(t)).pop() || r.region || "";
+  const naverInfo = (r) => `https://m.search.naver.com/search.naver?query=${encodeURIComponent(`${guName(r)} ${r.name}`.trim())}`;
   const naverSearch = (r) => `https://map.naver.com/p/search/${encodeURIComponent(`${r.name} ${r.subregion || r.region}`)}`;
 
   // ---------------------------------------------------------------- 길찾기 (휴대폰: 앱 바로, 없으면 웹 / PC: 웹)
@@ -286,12 +289,19 @@
       <button type="button" class="back" data-action="back">
         <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="m15 18-6-6 6-6"/></svg>목록</button>
       <div class="hero"><img src="${esc(r.videos[0] ? ytThumb(r.videos[0].id) : r.thumb)}" alt=""></div>
-      <h2>${esc(r.name)}</h2>
+      <h2><a class="name-link" href="${naverInfo(r)}" target="_blank" rel="noopener">${esc(r.name)}<span class="chev" aria-hidden="true">›</span></a></h2>
+      <p class="name-sub">네이버에서 예약·메뉴 보기</p>
       <div class="meta"><span class="cat" style="--c:${COLORS[r.category] || COLORS["기타"]}">${esc(r.category)}</span>
         <span>${esc(r.hood || r.region)}</span>${dist}${autoBadge(r)}${programsOf(r).includes(REGION_PROGRAM) ? regionBadge : ""}${adBadges(r)}</div>
       <p class="addr"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7Zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5Z"/></svg>
         <span>${esc(r.address)}</span><button type="button" class="copy" data-action="copy">복사</button></p>
-      ${r.lat != null ? `
+      <h4 class="section-title">나온 영상 <span class="yt">${r.videos.length}</span></h4>
+      <ul class="videos">${r.videos.map((v) => `
+        <li><a class="video" href="https://www.youtube.com/watch?v=${encodeURIComponent(v.id)}" target="_blank" rel="noopener">
+          <div class="thumb"><img loading="lazy" src="${ytThumb(v.id)}" alt=""></div>
+          <div><b>${esc(v.title)}</b><span>${esc(videoSource(v))} · ${esc(v.date)}${v.ad ? ` ${adBadge(v.ad)}` : ""}</span></div></a></li>`).join("")}
+      </ul>
+      <div class="route-bar">${r.lat != null ? `
       <div class="route-mode" role="radiogroup" aria-label="이동수단">${Object.entries(ROUTE).map(([k, m]) =>
         `<button type="button" data-action="mode" data-mode="${k}" aria-checked="${state.routeMode === k}">${m.label}</button>`).join("")}
       </div>
@@ -299,20 +309,14 @@
         <button type="button" class="btn btn-kakao" data-action="route" data-app="kakao">카카오맵 길찾기</button>
         <button type="button" class="btn btn-naver" data-action="route" data-app="naver">네이버지도 길찾기</button>
       </div>` : `
-      <div class="actions"><a class="btn btn-naver" href="${naverSearch(r)}" target="_blank" rel="noopener">네이버지도에서 보기</a></div>`}
-      <h4 class="section-title">나온 영상 <span class="yt">${r.videos.length}</span></h4>
-      <ul class="videos">${r.videos.map((v) => `
-        <li><a class="video" href="https://www.youtube.com/watch?v=${encodeURIComponent(v.id)}" target="_blank" rel="noopener">
-          <div class="thumb"><img loading="lazy" src="${ytThumb(v.id)}" alt=""></div>
-          <div><b>${esc(v.title)}</b><span>${esc(videoSource(v))} · ${esc(v.date)}${v.ad ? ` ${adBadge(v.ad)}` : ""}</span></div></a></li>`).join("")}
-      </ul>`;
+      <div class="actions"><a class="btn btn-naver" href="${naverSearch(r)}" target="_blank" rel="noopener">네이버지도에서 보기</a></div>`}</div>`;
     el.detail.hidden = false;
     el.scroll.hidden = true;
     el.listMeta.hidden = true;            // 모바일에서는 위 손잡이(sheet-grip)로 시트를 끌 수 있다
     el.detail.scrollTop = 0;
     for (const c of el.list.querySelectorAll(".card")) c.classList.toggle("is-active", +c.dataset.id === id);
     highlightPin(id);
-    if (MOBILE.matches) setSheet("half");
+    if (MOBILE.matches) setSheet("full");            // 핀·목록에서 가게를 누르면 바로 다 펼친다 (검색창·칩 바로 아래까지)
     if (pan && map && r.lat != null) focusOn(r);
   }
 
@@ -509,7 +513,7 @@
     const K = kakao.maps;
     if (map.getLevel() > 5) map.setLevel(4, { animate: true });
     map.panTo(new K.LatLng(r.lat, r.lon));
-    if (MOBILE.matches) {
+    if (MOBILE.matches && state.sheet !== "full") {
       // 핀이 아래 시트에 가려지지 않게 위로 조금 올린다
       setTimeout(() => {
         const sheetTop = el.panel.getBoundingClientRect().top;
@@ -697,7 +701,7 @@
     el.app.style.setProperty("--sheet-top", `${g.top}px`);
     el.app.style.setProperty("--sheet-y", `${g.offsets[name]}px`);
     el.app.style.setProperty("--sheet-visible", `${window.innerHeight - g.top - g.offsets[name]}px`);
-    const wantView = name === "full" ? "list" : "map";
+    const wantView = name === "full" && state.selected == null ? "list" : "map";   // 상세를 펼친 건 '목록 보기'가 아님
     if (state.view !== wantView) {
       state.view = wantView;
       el.app.dataset.view = wantView;
@@ -705,49 +709,94 @@
     }
   }
 
+  // 시트 끌기 (휴대폰). 손잡이·'N곳' 줄은 바로 끌리고, 상세·목록 내용은 맨 위까지 스크롤된 상태에서 아래로 끌 때부터
+  // 시트가 손가락을 따라온다 (내용이 스크롤돼 있으면 먼저 맨 위까지 올라간 뒤). 놓을 때:
+  //  - 아래로 시트 높이의 20% 이상 끌었거나 빠르게 쓸어내렸으면 → 바로 닫힘 (중간 단계에서 멈추지 않음)
+  //  - 위로 40px 이상 끌었거나 빠르게 쓸어올렸으면 → 다 펼침
+  //  - 조금만 끌었으면 → 원래 높이로
+  // 끈 직후의 click(상호명 링크 등)은 무시한다. 터치는 touch 이벤트(내용 스크롤과 같이 다루려고), 마우스는 pointer 이벤트
+  const CLOSE_RATIO = 0.2, FLICK = 0.5;          // 닫힘: 높이의 20% / 빠르기 0.5px/ms (= 500px/s)
+  let lastDragEnd = 0;
+
   function enableSheetDrag() {
-    let startY = 0, startOffset = 0, dragging = false, moved = false;
-    const onDown = (e) => {
-      if (!MOBILE.matches || e.target.closest("button")) return;     // 반경 버튼 등은 끌기가 아니라 누르기
-      dragging = true; moved = false;
-      startY = e.clientY;
-      startOffset = sheetGeometry().offsets[state.sheet];
+    let g = null;                                 // 지금 손가락 하나의 제스처
+    const offsetOf = (name) => sheetGeometry().offsets[name];
+    const startDrag = (y) => {
+      g.dragging = true;
+      g.baseY = y;
+      g.start = offsetOf(state.sheet);
+      g.height = window.innerHeight - sheetGeometry().top - g.start;     // 지금 보이는 시트 높이
       el.panel.classList.add("dragging");
-      el.app.classList.add("sheet-dragging");                         // 끄는 동안 앱 설치 띠 숨김
-      e.target.setPointerCapture?.(e.pointerId);
+      el.app.classList.add("sheet-dragging");                           // 끄는 동안 앱 설치 띠 숨김
     };
-    const onMove = (e) => {
-      if (!dragging) return;
-      const dy = e.clientY - startY;
-      if (Math.abs(dy) > 4) moved = true;
-      const y = Math.max(0, startOffset + dy);
-      el.app.style.setProperty("--sheet-y", `${y}px`);
-    };
-    const onUp = (e) => {
-      if (!dragging) return;
-      dragging = false;
+    const follow = (y) => el.app.style.setProperty("--sheet-y", `${Math.max(0, g.start + y - g.baseY)}px`);
+    const finish = (y) => {
       el.panel.classList.remove("dragging");
       el.app.classList.remove("sheet-dragging");
-      const g = sheetGeometry();
-      const y = startOffset + (e.clientY - startY);
-      if (!moved) {                       // 탭: 접힘 → 반 → 전체 → 반
-        setSheet(state.sheet === "closed" ? "half" : state.sheet === "half" ? "full" : "half");
-        return;
-      }
-      // 끈 방향의 가장 가까운 단계로 (조금만 내려도 다음 단계로 내려가게)
-      const dy = e.clientY - startY;
-      const order = ["full", "half", "closed"];
-      const i = order.indexOf(state.sheet);
-      const candidates = Math.abs(dy) < 40 ? [state.sheet]
-        : dy > 0 ? order.slice(Math.min(i + 1, 2)) : order.slice(0, Math.max(i, 1));
-      const nearest = candidates.sort((a, b) => Math.abs(g.offsets[a] - y) - Math.abs(g.offsets[b] - y))[0];
-      setSheet(nearest);
+      lastDragEnd = Date.now();
+      const dy = y - g.baseY;
+      if (dy > 0 && (dy >= g.height * CLOSE_RATIO || (g.v > FLICK && dy > 10))) setSheet("closed");
+      else if (dy < 0 && state.sheet !== "full" && (-dy >= 40 || (g.v < -FLICK && dy < -10))) setSheet("full");
+      else setSheet(state.sheet);                                      // 조금만 끌었으면 제자리로
     };
+    const tapHandle = () => setSheet(state.sheet === "closed" ? "half" : state.sheet === "half" ? "full" : "half");
+
+    el.panel.addEventListener("touchstart", (e) => {
+      if (!MOBILE.matches || e.touches.length !== 1) { g = null; return; }
+      const t = e.touches[0];
+      g = { y0: t.clientY, last: t.clientY, lastT: e.timeStamp, v: 0, dragging: false,
+            handle: !!e.target.closest(".sheet-grip, .list-meta"), button: !!e.target.closest("button"),
+            scroller: e.target.closest(".detail, .scroll") };
+    }, { passive: true });
+    el.panel.addEventListener("touchmove", (e) => {
+      if (!g) return;
+      const y = e.touches[0].clientY;
+      const dt = Math.max(1, e.timeStamp - g.lastT);
+      g.v = 0.6 * g.v + 0.4 * ((y - g.last) / dt);                    // 최근 빠르기 (px/ms, 아래가 +)
+      const down = y > g.last;
+      g.last = y; g.lastT = e.timeStamp;
+      if (!g.dragging) {
+        if (g.handle && Math.abs(y - g.y0) > 6) startDrag(y);
+        else if (g.scroller && down && g.scroller.scrollTop <= 0 && y - g.y0 > 6) startDrag(y);   // 맨 위에서 아래로
+      }
+      if (g.dragging) {
+        if (e.cancelable) e.preventDefault();                          // 내용 스크롤 대신 시트를 끈다
+        follow(y);
+      }
+    }, { passive: false });
+    const end = () => {
+      if (!g) return;
+      if (g.dragging) finish(g.last);
+      else if (g.handle && !g.button && Math.abs(g.last - g.y0) <= 6) tapHandle();   // 손잡이·'N곳' 줄 탭
+      g = null;
+    };
+    el.panel.addEventListener("touchend", end);
+    el.panel.addEventListener("touchcancel", end);
+    // 끈 직후 손을 뗀 자리의 click 은 무시 (상호명 링크가 열리거나 카드가 눌리지 않게)
+    el.panel.addEventListener("click", (e) => {
+      if (Date.now() - lastDragEnd < 400) { e.preventDefault(); e.stopPropagation(); }
+    }, true);
+
+    // 마우스 (좁은 PC 창): 손잡이·'N곳' 줄만
+    let m = null;
     for (const h of [el.grip, el.listMeta]) {
-      h.addEventListener("pointerdown", onDown);
-      h.addEventListener("pointermove", onMove);
-      h.addEventListener("pointerup", onUp);
-      h.addEventListener("pointercancel", onUp);
+      h.addEventListener("pointerdown", (e) => {
+        if (!MOBILE.matches || e.pointerType !== "mouse" || e.target.closest("button")) return;
+        g = { y0: e.clientY, last: e.clientY, lastT: e.timeStamp, v: 0, dragging: false, handle: true };
+        m = h;
+        h.setPointerCapture?.(e.pointerId);
+      });
+      h.addEventListener("pointermove", (e) => {
+        if (m !== h || !g) return;
+        const dt = Math.max(1, e.timeStamp - g.lastT);
+        g.v = 0.6 * g.v + 0.4 * ((e.clientY - g.last) / dt);
+        g.last = e.clientY; g.lastT = e.timeStamp;
+        if (!g.dragging && Math.abs(e.clientY - g.y0) > 4) startDrag(e.clientY);
+        if (g.dragging) follow(e.clientY);
+      });
+      const up = () => { if (m === h) { m = null; end(); } };
+      h.addEventListener("pointerup", up);
+      h.addEventListener("pointercancel", up);
     }
   }
 
@@ -826,7 +875,7 @@
     el.detail.addEventListener("click", async (e) => {
       const a = e.target.closest("[data-action]");
       if (!a) return;
-      if (a.dataset.action === "back") closeDetail();
+      if (a.dataset.action === "back") { closeDetail(); if (MOBILE.matches) setSheet("full"); }
       if (a.dataset.action === "mode") {
         state.routeMode = a.dataset.mode;
         for (const b of el.detail.querySelectorAll("[data-action=mode]")) b.setAttribute("aria-checked", String(b === a));

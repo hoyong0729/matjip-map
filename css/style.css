@@ -285,7 +285,7 @@ a { color: inherit; text-decoration: none; }
 .empty-sub { margin: 0; color: var(--ink-3); font-size: 14px; }
 
 /* ------------------------------------------------------------ 상세 */
-.detail { flex: 1; min-height: 0; overflow-y: auto; background: var(--bg); padding: 12px 16px 24px; }
+.detail { flex: 1; min-height: 0; overflow-y: auto; background: var(--bg); padding: 12px 16px 0; }   /* 아래 여백은 .route-bar 가 */
 .back {
   display: inline-flex; align-items: center; gap: 4px; margin: 0 0 12px -6px;
   border: 0; background: transparent; padding: 6px; border-radius: 8px;
@@ -294,7 +294,19 @@ a { color: inherit; text-decoration: none; }
 .back:hover { background: var(--bg-2); }
 .hero { aspect-ratio: 16 / 9; border-radius: var(--radius); overflow: hidden; background: #e9ecef; box-shadow: var(--shadow-1); }
 .hero img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.detail h2 { margin: 16px 0 8px; font-size: 22px; font-weight: 800; letter-spacing: -0.03em; }
+.detail h2 { margin: 16px 0 2px; font-size: 22px; font-weight: 800; letter-spacing: -0.03em; }
+/* 상호명 → 네이버 검색 (예약·메뉴) */
+.name-link { color: inherit; text-decoration: none; }
+.name-link .chev { margin-left: 4px; color: var(--ink-3); font-weight: 600; }
+.name-link:active { opacity: .6; }
+.name-sub { margin: 0 0 8px; font-size: 12px; color: var(--ink-3); }
+/* 이동수단 탭 + 길찾기 버튼: 상세 맨 아래에 고정 (내용이 길면 위쪽만 스크롤) */
+.route-bar {
+  position: sticky; bottom: 0; z-index: 1; margin: 8px -16px 0; padding: 2px 16px 0;
+  background: var(--bg); box-shadow: 0 -6px 12px -8px rgba(17, 24, 39, .18);
+}
+.route-bar .route-mode { margin-top: 10px; }
+.route-bar .actions { margin: 8px 0 0; padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
 .addr { display: flex; align-items: flex-start; gap: 8px; margin: 12px 0 0; font-size: 14px; color: var(--ink-2); line-height: 1.5; }
 .addr svg { flex: none; margin-top: 2px; color: var(--ink-3); }
 .copy {
@@ -317,7 +329,7 @@ a { color: inherit; text-decoration: none; }
 .btn:hover { filter: brightness(.96); }
 .btn-kakao { background: #fee500; color: #191919; }
 .btn-naver { background: #03c75a; color: #fff; }
-.section-title { margin: 0 0 10px; font-size: 15px; font-weight: 700; }
+.section-title { margin: 22px 0 10px; font-size: 15px; font-weight: 700; }   /* 주소 바로 아래 (길찾기 줄은 맨 아래로) */
 .videos { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .video {
   display: grid; grid-template-columns: 128px 1fr; gap: 12px; align-items: center;
@@ -496,7 +508,7 @@ a { color: inherit; text-decoration: none; }
     border: 0; border-radius: 20px 20px 0 0; background: var(--bg-2);
     box-shadow: 0 -4px 24px rgba(17, 24, 39, .14);
     transform: translateY(var(--sheet-y, 50vh));
-    transition: transform .28s cubic-bezier(.2, .8, .2, 1);
+    transition: transform .25s cubic-bezier(.2, .8, .2, 1);
     will-change: transform;
   }
   .panel.dragging { transition: none; }
@@ -507,7 +519,7 @@ a { color: inherit; text-decoration: none; }
   .sheet-grip { display: grid; place-items: center; height: 22px; flex: none; cursor: grab; touch-action: none; }
   .sheet-grip span { width: 40px; height: 5px; border-radius: 3px; background: #d4d8dd; }
   .list-meta { padding: 0 16px 8px; touch-action: none; }
-  .detail { border-radius: 20px 20px 0 0; padding-top: 4px; }
+  .detail { border-radius: 20px 20px 0 0; padding-top: 4px; padding-bottom: 0; overscroll-behavior: contain; }
   .card { grid-template-columns: 104px 1fr; }
   .actions { margin-bottom: 18px; }
 }
