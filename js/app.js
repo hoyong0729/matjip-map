@@ -390,38 +390,49 @@
 
   // ---------------------------------------------------------------- 핀치 확대·축소 (터치 기기)
   // 카카오 기본 핀치는 손가락 간격 비율로만 레벨을 바꾸고(반 → 1단계) 빠르기는 안 봐서, 동네에서 서울까지 4~5번 오므려야 했다.
-  // 기본 줌을 끄고 직접: 단계 = log2(간격 비율) 반올림(살짝이라도 오므리면 1단계) + 빠르기 보너스(+1~2), 한 번에 최대 4단계,
-  // 레벨 MIN_LEVEL~MAX_LEVEL. 오므리는 동안은 지도를 CSS 로 손가락 따라 키우고 줄이다가, 놓으면 목표 배율까지 0.2초 애니메이션 뒤
-  // 그 레벨로 바꾼다 (레벨 1 = 2배라 배율이 딱 맞아 끊김 없음). 기준점은 두 손가락 가운데.
+  // 기본 줌을 끄고 직접 처리한다 (레벨 MIN_LEVEL~MAX_LEVEL):
+  //  - 축소(오므리기): log2(간격 비율) 반올림(살짝이라도 1단계) + 빠르기 보너스(+1~2), 한 번에 최대 4단계
+  //  - 확대(벌리기): 카카오 기본처럼 간격 비율로만 (2배 → 1단계, 4배 → 2단계), 한 번에 최대 2단계 (2026-10-14: 빠르기 보너스로
+  //    16배까지 커져 손가락이 가리킨 곳을 지나쳐 버리던 문제)
+  //  - 기준점: 손가락을 처음 댔을 때 두 손가락 가운데 있던 곳이, 손가락을 따라 움직여 **놓는 순간의 가운데**에 남는다.
+  //    끄는 동안은 CSS translate+scale 로 손가락을 따라가고, 놓으면 목표 배율까지 0.2초 애니메이션 뒤 setLevel(anchor) +
+  //    setCenter 로 같은 자리에 맞춘다 (레벨 1 = 2배라 배율이 딱 맞아 끊김 없음)
   // 한 손가락 이동·묶음 핀 탭은 카카오 그대로. 기본 줌을 끄면 두 번 탭 확대도 꺼지므로 그것도 직접(1단계 확대)
-  const MIN_LEVEL = 1, MAX_LEVEL = 13, PINCH_MAX_STEPS = 4;
+  const MIN_LEVEL = 1, MAX_LEVEL = 13, PINCH_MAX_STEPS = 4, PINCH_MAX_IN = 2;
   const PINCH_MIN = 0.12;             // 이보다 작은 변화(간격 약 8% 이하)는 손떨림으로 보고 무시
-  const PINCH_FAST = [2.5, 5];        // 빠르기(초당 log2 비율): 2.5 이상 +1, 5 이상 +2 (반으로 0.4초 / 0.2초. 휙 오므리기는 보통 0.15~0.3초)
+  const PINCH_FAST = [2.5, 5];        // 축소 빠르기(초당 log2 비율): 2.5 이상 +1, 5 이상 +2 (반으로 0.4초 / 0.2초)
 
   function pinchSteps(ratio, seconds) {
     const raw = Math.log2(ratio);                     // 오므리면 + (축소), 벌리면 - (확대)
     if (Math.abs(raw) < PINCH_MIN) return 0;
-    const speed = Math.abs(raw) / Math.max(seconds, 0.05);
+    const base = Math.max(1, Math.round(Math.abs(raw)));
+    if (raw < 0) return -Math.min(PINCH_MAX_IN, base);   // 확대: 간격 비율로만
+    const speed = raw / Math.max(seconds, 0.05);
     const bonus = speed >= PINCH_FAST[1] ? 2 : speed >= PINCH_FAST[0] ? 1 : 0;
-    return Math.sign(raw) * Math.min(PINCH_MAX_STEPS, Math.max(1, Math.round(Math.abs(raw))) + bonus);
+    return Math.min(PINCH_MAX_STEPS, base + bonus);
   }
 
-  function zoomAt(steps, x, y, { animate = true } = {}) {
+  // from(처음 손가락 가운데, 지도 기준 px) 에 있던 곳을 to(놓을 때 가운데) 에 두고 steps 단계 바꾼다
+  function zoomAt(steps, from, to = from, { animate = true } = {}) {
     const K = kakao.maps;
-    const target = Math.min(MAX_LEVEL, Math.max(MIN_LEVEL, map.getLevel() + steps));
-    if (target === map.getLevel()) return Promise.resolve(0);
-    const real = target - map.getLevel();
     const mapEl = document.getElementById("map");
-    const anchor = map.getProjection().coordsFromContainerPoint(new K.Point(x, y));
+    const target = Math.min(MAX_LEVEL, Math.max(MIN_LEVEL, map.getLevel() + steps));
+    const real = target - map.getLevel();
+    const dx = to[0] - from[0], dy = to[1] - from[1];
+    const anchor = map.getProjection().coordsFromContainerPoint(new K.Point(from[0], from[1]));
     const done = () => {
       mapEl.style.transition = mapEl.style.transform = mapEl.style.transformOrigin = "";
-      map.setLevel(target, { anchor });                // 배율이 이미 맞아 있으니 바로 바꿔도 안 튄다
+      if (real) map.setLevel(target, { anchor });      // anchor 는 화면 from 자리에 그대로 (배율이 이미 맞아 안 튄다)
+      if (dx || dy) {                                  // 손가락이 옮겨 간 만큼 지도도 옮긴다 (anchor → to)
+        const c = [mapEl.clientWidth / 2 - dx, mapEl.clientHeight / 2 - dy];
+        map.setCenter(map.getProjection().coordsFromContainerPoint(new K.Point(c[0], c[1])));
+      }
     };
-    if (!animate) { done(); return Promise.resolve(real); }
+    if (!animate || (!real && !dx && !dy)) { done(); return Promise.resolve(real); }
     return new Promise((resolve) => {
-      mapEl.style.transformOrigin = `${x}px ${y}px`;
+      mapEl.style.transformOrigin = `${from[0]}px ${from[1]}px`;
       mapEl.style.transition = "transform .2s ease-out";
-      requestAnimationFrame(() => { mapEl.style.transform = `scale(${2 ** -real})`; });
+      requestAnimationFrame(() => { mapEl.style.transform = `translate(${dx}px, ${dy}px) scale(${2 ** -real})`; });
       setTimeout(() => { done(); resolve(real); }, 210);
     });
   }
@@ -430,26 +441,28 @@
     const mapEl = document.getElementById("map");
     map.setZoomable(false);
     let p = null, lastTap = null;
-    const mid = (t) => {
-      const r = mapEl.getBoundingClientRect();
-      return [(t[0].clientX + t[1].clientX) / 2 - r.left, (t[0].clientY + t[1].clientY) / 2 - r.top];
-    };
+    // 지도 기준 좌표. 끄는 동안 #map 에 CSS 변형이 걸려 getBoundingClientRect 가 바뀌므로, 변형이 없는 부모(.map-wrap) 기준으로
+    const box = () => mapEl.parentElement.getBoundingClientRect();
+    const mid = (t, r = box()) => [(t[0].clientX + t[1].clientX) / 2 - r.left, (t[0].clientY + t[1].clientY) / 2 - r.top];
     const gap = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
     mapEl.addEventListener("touchstart", (e) => {
       if (e.touches.length === 2) {
         e.preventDefault();
-        map.setDraggable(false);                      // 두 손가락 동안 지도 이동 멈춤
-        p = { d0: gap(e.touches), d: gap(e.touches), c: mid(e.touches), t0: e.timeStamp };
+        map.setDraggable(false);                      // 두 손가락 동안 카카오 이동은 멈추고 직접 따라감
+        const c = mid(e.touches);
+        p = { d0: gap(e.touches), d: gap(e.touches), c0: c, c, t0: e.timeStamp };
         mapEl.style.transition = "";
-        mapEl.style.transformOrigin = `${p.c[0]}px ${p.c[1]}px`;
+        mapEl.style.transformOrigin = `${c[0]}px ${c[1]}px`;
       }
     }, { passive: false, capture: true });
     mapEl.addEventListener("touchmove", (e) => {
       if (!p || e.touches.length < 2) return;
       e.preventDefault();                             // 브라우저 화면 확대 막기
       p.d = gap(e.touches);
+      p.c = mid(e.touches);
       const scale = Math.min(16, Math.max(1 / 16, p.d / p.d0));
-      mapEl.style.transform = `scale(${scale})`;       // 손가락을 그대로 따라감
+      // 처음 가운데에 있던 곳이 지금 손가락 가운데를 따라가게
+      mapEl.style.transform = `translate(${p.c[0] - p.c0[0]}px, ${p.c[1] - p.c0[1]}px) scale(${scale})`;
     }, { passive: false, capture: true });
     const end = (e) => {
       if (p && e.touches.length < 2) {
@@ -458,14 +471,8 @@
         const seconds = (e.timeStamp - pinch.t0) / 1000;
         const steps = pinchSteps(pinch.d0 / pinch.d, seconds);
         state.lastPinch = { ratio: +(pinch.d0 / pinch.d).toFixed(2), seconds: +seconds.toFixed(2), steps };   // 확인용
-        if (steps) {
-          // 지금 손가락 배율에서 목표 배율로 이어서 애니메이션
-          zoomAt(steps, ...pinch.c).then(() => map.setDraggable(true));
-        } else {
-          mapEl.style.transition = "transform .15s ease-out";
-          mapEl.style.transform = "scale(1)";
-          setTimeout(() => { mapEl.style.transition = mapEl.style.transform = ""; map.setDraggable(true); }, 160);
-        }
+        // 지금 손가락 배율·위치에서 목표 배율로 이어서 (단계가 0 이어도 손가락이 옮겨 간 만큼은 지도 이동)
+        zoomAt(steps, pinch.c0, pinch.c).then(() => map.setDraggable(true));
         lastTap = null;
         return;
       }
@@ -473,8 +480,8 @@
       if (e.touches.length === 0 && e.changedTouches.length === 1 && !e.target.closest(".pin, .pin-label, button")) {
         const t = e.changedTouches[0], now = e.timeStamp;
         if (lastTap && now - lastTap.t < 300 && Math.hypot(t.clientX - lastTap.x, t.clientY - lastTap.y) < 30) {
-          const r = mapEl.getBoundingClientRect();
-          zoomAt(-1, t.clientX - r.left, t.clientY - r.top);
+          const r = box();
+          zoomAt(-1, [t.clientX - r.left, t.clientY - r.top]);
           lastTap = null;
         } else lastTap = { t: now, x: t.clientX, y: t.clientY };
       }
@@ -487,8 +494,8 @@
       e.preventDefault();
       if (e.timeStamp - wheelAt < 250 || !e.deltaY) return;
       wheelAt = e.timeStamp;
-      const r = mapEl.getBoundingClientRect();
-      zoomAt(e.deltaY > 0 ? 1 : -1, e.clientX - r.left, e.clientY - r.top);
+      const r = box();
+      zoomAt(e.deltaY > 0 ? 1 : -1, [e.clientX - r.left, e.clientY - r.top]);
     }, { passive: false });
   }
 
