@@ -164,6 +164,12 @@ a { color: inherit; text-decoration: none; }
 .pill-btn svg { flex: none; color: var(--ink-3); }
 .pill-btn.is-on { border-color: var(--ink); background: var(--ink); color: #fff; }
 .pill-btn.is-on svg { color: rgba(255, 255, 255, .7); }
+.famous-btn { gap: 4px; padding: 0 12px; max-width: none; }
+.famous-star { color: var(--ink-3); font-size: 13px; }
+.famous-btn[aria-pressed="true"] { border-color: var(--accent); background: var(--accent); color: #fff; }
+.famous-btn[aria-pressed="true"] .famous-star { color: #fff; }
+/* 조회수 '조회수 12만' — 회색 작게 */
+.views { font-size: 11.5px; font-weight: 500; color: var(--ink-3); white-space: nowrap; }
 .channel-pop {
   position: absolute; top: calc(100% + 6px); left: 0; z-index: 10; min-width: 200px;
   padding: 6px; border-radius: 14px; background: #fff; box-shadow: var(--shadow-2);
@@ -490,9 +496,13 @@ a { color: inherit; text-decoration: none; }
   .select-pill select { max-width: 144px; padding-right: 28px; }   /* '전체 지역 (274)' 이 잘리지 않게 */
   .pill-btn { box-shadow: var(--shadow-1); border-color: transparent; max-width: 96px; padding: 0 10px 0 12px; }
   .pill-btn.is-on { border-color: var(--ink); }
+  .famous-btn { width: 36px; padding: 0; justify-content: center; box-shadow: var(--shadow-1); border-color: transparent; }
+  .famous-label { display: none; }                                   /* 휴대폰: ★ 만 (자리 좁음) */
+  .famous-star { font-size: 15px; }
   /* 홈 화면 앱(상태바·홈 표시줄 아래로 깔림): 시트 아래쪽 내용이 홈 표시줄에 가리지 않게 */
   .scroll, .detail { padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
   .seg { background: #fff; box-shadow: var(--shadow-1); }
+  .seg button { padding: 0 10px; }                                  /* ★ 유명 토글 자리 (한 줄에 들어가게) */
   .chips { margin: 0 -12px; padding: 2px 12px 6px; }
   .chip { border-color: transparent; box-shadow: var(--shadow-1); }
   .updated { top: auto; right: 12px; bottom: calc(var(--sheet-visible, 40vh) + 12px); font-size: 12px; transition: bottom .25s;

@@ -100,6 +100,10 @@
           </button>
           <div class="channel-pop" id="channelPop" role="group" aria-label="채널" hidden></div>
         </div>
+        <!-- 유명 유튜버만 (channels.csv famous=1 채널 영상이 있는 가게만). 기본 꺼짐. 휴대폰은 ★ 만 -->
+        <button type="button" class="pill-btn famous-btn" id="famousBtn" aria-pressed="false" title="유명 유튜버 맛집만 보기">
+          <span class="famous-star" aria-hidden="true">★</span><span class="famous-label">유명 유튜버만</span>
+        </button>
         <div class="chips" id="chips" role="group" aria-label="음식 종류"></div>
         <div class="seg" id="viewSeg" role="tablist" aria-label="보기">
           <button type="button" data-view="map" role="tab">지도</button>

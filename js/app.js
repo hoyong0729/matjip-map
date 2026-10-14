@@ -24,6 +24,7 @@
     q: "",
     cats: new Set(),
     channels: new Set(), // 채널(프로그램) 여러 개 선택. 비면 전체
+    famousOnly: false,   // '유명 유튜버만' (channels.csv famous=1 채널 영상이 있는 가게만). 기본 꺼짐
     subset: null,        // 클러스터를 최대로 확대해도 안 펼쳐질 때(같은 건물) 그 식당 id 들만 목록에
     routeMode: "public", // 길찾기 이동수단: public(대중교통) / walk(도보) / car(자동차)
     region: "",          // "서울" 또는 "서울|중구", "" = 전체
@@ -49,7 +50,7 @@
     updated: $("updated"), mapMessage: $("mapMessage"), grip: $("sheetGrip"), listMeta: $("listMeta"),
     locate: $("locateBtn"), meRadius: $("meRadius"), toast: $("toast"),
     channelBtn: $("channelBtn"), channelPop: $("channelPop"), channelLabel: $("channelLabel"),
-    subsetClear: $("subsetClear"),
+    subsetClear: $("subsetClear"), famousBtn: $("famousBtn"),
     installBar: $("installBar"), installText: $("installText"), installGo: $("installGo"), installClose: $("installClose"),
   };
 
@@ -79,6 +80,11 @@
   // 상세의 상호명 → 네이버 검색(예약·메뉴). 검색어는 '구 이름 + 상호명' ('안양시 만안구' 면 '만안구')
   const guName = (r) => (r.subregion || "").split(" ").filter((t) => /[구시군]$/.test(t)).pop() || r.region || "";
   const naverInfo = (r) => `https://m.search.naver.com/search.naver?query=${encodeURIComponent(`${guName(r)} ${r.name}`.trim())}`;
+  // 조회수: '조회수 12만' (가게는 영상 중 최대값). refresh 가 매일 갱신
+  const fmtViews = (n) => n >= 1e8 ? `${+(n / 1e8).toFixed(1)}억` : n >= 1e5 ? `${Math.round(n / 1e4)}만`
+    : n >= 1e4 ? `${+(n / 1e4).toFixed(1)}만` : n.toLocaleString("ko-KR");
+  const maxViews = (r) => Math.max(0, ...r.videos.map((v) => v.views || 0));
+  const viewsTag = (n) => (n > 0 ? `<span class="views">조회수 ${fmtViews(n)}</span>` : "");
   const naverSearch = (r) => `https://map.naver.com/p/search/${encodeURIComponent(`${r.name} ${r.subregion || r.region}`)}`;
 
   // ---------------------------------------------------------------- 길찾기 (휴대폰: 앱 바로, 없으면 웹 / PC: 웹)
@@ -143,6 +149,7 @@
   function matchesBase(r) {
     if (state.cats.size && !state.cats.has(r.category)) return false;
     if (state.channels.size && !r.videos.some((v) => state.channels.has(v.program))) return false;
+    if (state.famousOnly && !r.videos.some((v) => v.famous)) return false;          // '유명 유튜버만' 토글
     if (state.region) {
       const [reg, sub] = state.region.split("|");
       if (r.region !== reg) return false;
@@ -254,7 +261,7 @@
           <span>${esc(r.hood || r.region)}</span>${dist}</div>
         <div class="badges">${progs.filter((p) => p !== REGION_PROGRAM).map((p) => `<span class="badge badge-prog">${esc(p)}</span>`).join("")}${
           regionChannels(r).map((c) => `<span class="badge badge-prog">${esc(c)}</span>`).join("")}${
-          progs.includes(REGION_PROGRAM) ? regionBadge : ""}${autoBadge(r)}${adBadges(r)}${
+          progs.includes(REGION_PROGRAM) ? regionBadge : ""}${autoBadge(r)}${adBadges(r)}${viewsTag(maxViews(r))}${
           r.videos.length > 1 ? `<span class="badge-count">영상 ${r.videos.length}개</span>` : ""}</div>
       </div></li>`;
   }
@@ -273,6 +280,11 @@
     el.locate.classList.toggle("is-on", !!state.me && !state.near);
     el.list.innerHTML = rows.map(cardHTML).join("");
     el.empty.hidden = rows.length > 0;
+    el.empty.querySelector(".empty-title").textContent = state.famousOnly
+      ? "이 지역은 유명 유튜버 맛집이 아직 없어요" : "조건에 맞는 식당이 없어요";
+    el.empty.querySelector(".empty-sub").textContent = state.famousOnly
+      ? "★ 유명 유튜버만을 끄면 모든 맛집을 볼 수 있어요" : "필터를 줄이거나 반경을 넓혀 보세요";
+    el.famousBtn.setAttribute("aria-pressed", String(state.famousOnly));
     for (const b of el.chips.querySelectorAll(".chip")) {
       const c = b.dataset.cat;
       b.setAttribute("aria-pressed", String(c ? state.cats.has(c) : state.cats.size === 0));
@@ -295,14 +307,14 @@
       <h2><a class="name-link" href="${naverInfo(r)}" target="_blank" rel="noopener">${esc(r.name)}<span class="chev" aria-hidden="true">›</span></a></h2>
       <p class="name-sub">네이버에서 예약·메뉴 보기</p>
       <div class="meta"><span class="cat" style="--c:${COLORS[r.category] || COLORS["기타"]}">${esc(r.category)}</span>
-        <span>${esc(r.hood || r.region)}</span>${dist}${autoBadge(r)}${programsOf(r).includes(REGION_PROGRAM) ? regionBadge : ""}${adBadges(r)}</div>
+        <span>${esc(r.hood || r.region)}</span>${dist}${autoBadge(r)}${programsOf(r).includes(REGION_PROGRAM) ? regionBadge : ""}${adBadges(r)}${viewsTag(maxViews(r))}</div>
       <p class="addr"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7Zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5Z"/></svg>
         <span>${esc(r.address)}</span><button type="button" class="copy" data-action="copy">복사</button></p>
       <h4 class="section-title">나온 영상 <span class="yt">${r.videos.length}</span></h4>
       <ul class="videos">${r.videos.map((v) => `
         <li><a class="video" href="https://www.youtube.com/watch?v=${encodeURIComponent(v.id)}" target="_blank" rel="noopener">
           <div class="thumb"><img loading="lazy" src="${ytThumb(v.id)}" alt=""></div>
-          <div><b>${esc(v.title)}</b><span>${esc(videoSource(v))} · ${esc(v.date)}${v.ad ? ` ${adBadge(v.ad)}` : ""}</span></div></a></li>`).join("")}
+          <div><b>${esc(v.title)}</b><span>${esc(videoSource(v))} · ${esc(v.date)}${v.views ? ` · 조회수 ${fmtViews(v.views)}` : ""}${v.ad ? ` ${adBadge(v.ad)}` : ""}</span></div></a></li>`).join("")}
       </ul>
       <div class="route-bar">${r.lat != null ? `
       <div class="route-mode" role="radiogroup" aria-label="이동수단">${Object.entries(ROUTE).map(([k, m]) =>
@@ -966,6 +978,13 @@
     });
     document.addEventListener("click", (e) => { if (!e.target.closest("#channelPick")) toggleChannelPop(false); });
     el.subsetClear.addEventListener("click", () => { clearSubset(); render(); });
+    el.famousBtn.addEventListener("click", () => {
+      state.famousOnly = !state.famousOnly;
+      clearSubset();
+      closeDetail();
+      render({ fit: true });
+      if (state.famousOnly && visible().length === 0) toast("이 지역은 유명 유튜버 맛집이 아직 없어요");
+    });
     el.chips.addEventListener("click", (e) => {
       const b = e.target.closest(".chip");
       if (!b) return;
