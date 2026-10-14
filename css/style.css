@@ -431,6 +431,24 @@ a { color: inherit; text-decoration: none; }
   box-shadow: var(--shadow-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
+/* 첫 방문 안내 (YouTube API Services 약관·개인정보처리방침). PC: 지도 아래쪽 가운데 / 휴대폰: 검색창·칩 바로 아래 */
+.yt-notice {
+  position: absolute; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 5;
+  width: min(560px, calc(100% - 32px)); display: flex; align-items: center; gap: 12px; padding: 10px 10px 10px 14px;
+  border-radius: 14px; background: rgba(255, 255, 255, .97); box-shadow: var(--shadow-2); font-size: 12.5px; color: var(--ink-2);
+}
+.yt-notice p { margin: 0; flex: 1 1 0; min-width: 0; line-height: 1.45; }
+.yt-notice a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+.yt-notice-actions { flex: none; display: flex; align-items: center; gap: 8px; }
+.yt-notice-more { font-size: 12.5px; white-space: nowrap; }
+.yt-notice-ok { border: 0; border-radius: 10px; padding: 7px 12px; background: var(--ink); color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
+@media (max-width: 768px) {
+  .yt-notice { top: var(--notice-top, 150px); bottom: auto; left: 12px; right: 12px; transform: none; width: auto;
+               flex-wrap: wrap; gap: 6px 10px; font-size: 12px; padding: 9px 10px 9px 12px; }
+  .yt-notice-actions { margin-left: auto; }
+  .app[data-sheet="full"] .yt-notice { display: none; }                  /* 시트를 다 펼치면 시트와 겹치므로 숨김 */
+}
+
 /* 앱 설치 안내 띠 (휴대폰만): 접힌 시트 바로 위, 시트를 열거나 끄는 중엔 숨김 */
 .install-bar {
   position: fixed; left: 12px; right: 12px; bottom: calc(var(--sheet-visible, 64px) + 10px); z-index: 6;

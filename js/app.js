@@ -52,6 +52,7 @@
     locate: $("locateBtn"), meRadius: $("meRadius"), toast: $("toast"),
     channelBtn: $("channelBtn"), channelPop: $("channelPop"), channelLabel: $("channelLabel"),
     subsetClear: $("subsetClear"), famousBtn: $("famousBtn"),
+    ytNotice: $("ytNotice"), ytNoticeOk: $("ytNoticeOk"),
     installBar: $("installBar"), installText: $("installText"), installGo: $("installGo"), installClose: $("installClose"),
   };
 
@@ -1200,9 +1201,31 @@
   }
 
   // ---------------------------------------------------------------- 시작
+  // 첫 방문 안내: YouTube API Services 사용·약관·Google 개인정보처리방침 (Developer Policies III.A.2). [확인] 하면 다시 안 뜸
+  const NOTICE_KEY = "matjip-yt-notice";
+  function bindNotice() {
+    if (storeGet(NOTICE_KEY)) return;
+    const place = () => {                       // 휴대폰: 검색창·칩 바로 아래
+      if (MOBILE.matches) el.app.style.setProperty("--notice-top", `${Math.round(el.topbar.getBoundingClientRect().bottom) + 8}px`);
+    };
+    place();
+    // 칩 줄은 데이터를 읽은 뒤에 그려져 검색창 영역 높이가 나중에 바뀐다 → 크기가 바뀔 때마다 다시 맞춤
+    const ro = typeof ResizeObserver === "function" ? new ResizeObserver(place) : null;
+    ro?.observe(el.topbar);
+    addEventListener("resize", place);
+    el.ytNotice.hidden = false;
+    el.ytNoticeOk.addEventListener("click", () => {
+      storeSet(NOTICE_KEY, String(Date.now()));
+      el.ytNotice.hidden = true;
+      ro?.disconnect();
+      removeEventListener("resize", place);
+    });
+  }
+
   async function main() {
     bind();
     bindInstall();
+    bindNotice();
     setView("map");
     // 모바일 첫 화면은 지도가 주인공: 시트는 접힌 바(손잡이 + 'N곳')로 시작
     if (MOBILE.matches) setSheet("closed", { animate: false });

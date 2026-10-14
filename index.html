@@ -141,6 +141,14 @@
 
     <main class="map-wrap" id="mapWrap">
       <div id="map" aria-label="지도"></div>
+      <!-- 첫 방문 안내 (YouTube Developer Policies III.A.2: 이용 전 약관·개인정보처리방침 안내). [확인] 후 다시 안 뜸 (localStorage matjip-yt-notice).
+           휴대폰: 검색창·칩 바로 아래 (아래 시트·설치 안내 띠와 안 겹침, 시트를 다 펼치면 숨김) / PC: 지도 아래쪽 가운데 -->
+      <div class="yt-notice" id="ytNotice" role="region" aria-label="이용 안내" hidden>
+        <p>이 사이트는 YouTube API Services를 사용합니다. 이용 시 <a href="https://www.youtube.com/t/terms" target="_blank" rel="noopener">YouTube 약관</a>과
+          <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google 개인정보처리방침</a>에 동의하게 됩니다.</p>
+        <div class="yt-notice-actions"><a class="yt-notice-more" href="about.html">이용 안내</a>
+          <button type="button" class="yt-notice-ok" id="ytNoticeOk">확인</button></div>
+      </div>
       <div class="updated" id="updated"></div>
       <div class="zoom" id="zoom" hidden>
         <button type="button" data-zoom="-1" aria-label="확대">
