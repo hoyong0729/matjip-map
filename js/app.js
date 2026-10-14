@@ -1,4 +1,4 @@
-/* 맛도리 (유튜버가 다녀간 맛집 지도) — 빌드 도구 없는 정적 웹앱.
+/* 맛도리 (유튜버·방송이 인정한 맛집 지도) — 빌드 도구 없는 정적 웹앱.
  * 데이터: data/restaurants.json (python -m matjip export)
  * 지도:   카카오맵 JavaScript SDK (config.js 의 kakaoJsKey, services·clusterer 라이브러리)
  */
@@ -65,7 +65,27 @@
     return 2 * R * Math.asin(Math.sqrt(h));
   }
   const fmtDist = (km) => (km < 1 ? `${Math.round(km * 1000 / 10) * 10}m` : `${km.toFixed(1)}km`);
-  const programsOf = (r) => [...new Set(r.videos.map((v) => v.program).filter(Boolean))];
+  // 방송 출연 셰프 가게 (흑백요리사 — export 의 r.broadcast, 사용자 승인 후에만 들어옴). 영상이 없을 수 있다.
+  // 채널 필터에는 '방송 › 흑백요리사', 배지는 글자만 '흑백요리사 · ○○ 셰프' (원칙 11: 방송사 로고·방송 화면 이미지 금지)
+  const BROADCAST = "방송 › ";
+  const broadcastsOf = (r) => r.broadcast || [];
+  const programsOf = (r) => [...new Set([...r.videos.map((v) => v.program).filter(Boolean),
+                                         ...broadcastsOf(r).map((b) => BROADCAST + b.program)])];
+  // 셰프 이름이 출처마다 다르면 export 가 chef='' 로 보냄 → 배지는 '흑백요리사'만
+  const tvLabel = (b) => (b.chef ? `${b.program} · ${b.chef} 셰프` : b.program);
+  const tvBadges = (r) => broadcastsOf(r).map((b) =>
+    `<span class="badge badge-tv" title="${esc(b.program)} 시즌${esc(b.season)} 출연 셰프의 가게">${esc(tvLabel(b))}</span>`).join("");
+  // 출처에 코스·오마카세·예약제로 적힌 가게만 상세에 작은 회색 태그 (가격은 쓰지 않음)
+  const courseTag = (r) => (broadcastsOf(r).some((b) => b.course)
+    ? `<span class="badge badge-course" title="출처에 코스·오마카세·예약제로 소개된 가게">코스·예약제</span>` : "");
+  // 썸네일: 영상이 있으면 유튜브 썸네일, 방송 가게뿐이면 글자 자리표시 (방송 화면 이미지는 쓰지 않음)
+  const thumbHTML = (r, cls = "thumb") => {
+    const src = r.videos[0] ? ytThumb(r.videos[0].id) : r.thumb;
+    if (src) return `<div class="${cls}"><img loading="lazy" src="${esc(src)}" alt="">${cls === "thumb" ? `<span class="play" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="10" height="10"><path fill="currentColor" d="M8 5v14l11-7z"/></svg></span>` : ""}</div>`;
+    const b = broadcastsOf(r)[0];
+    return `<div class="${cls} thumb-tv"><span>${esc(b ? b.program : r.name)}</span></div>`;
+  };
   const latestDate = (r) => r.videos.reduce((m, v) => (v.date > m ? v.date : m), "");
   // 설명란에서 확정한 식당(먹을텐데 등)과 구분: 여러 증거로 자동 매칭한 식당에만 작은 배지
   const autoBadge = (r) => (r.source === "자동매칭"
@@ -149,8 +169,9 @@
   // ---------------------------------------------------------------- 필터
   function matchesBase(r) {
     if (state.cats.size && !state.cats.has(r.category)) return false;
-    if (state.channels.size && !r.videos.some((v) => state.channels.has(v.program))) return false;
-    if (state.famousOnly && !r.videos.some((v) => v.famous)) return false;          // '유명 유튜버만' 토글
+    if (state.channels.size && !programsOf(r).some((p) => state.channels.has(p))) return false;
+    // '유명 유튜버만' 토글: 유명 채널 영상이 있거나 방송(흑백요리사) 가게
+    if (state.famousOnly && !(r.videos.some((v) => v.famous) || broadcastsOf(r).length)) return false;
     if (state.region) {
       const [reg, sub] = state.region.split("|");
       if (r.region !== reg) return false;
@@ -225,7 +246,8 @@
       names.map((n) => `<button type="button" class="ch-item" data-ch="${esc(n)}" aria-pressed="${state.channels.has(n)}">`
         + `<span class="ch-check" aria-hidden="true"></span>${esc(n)}<span class="n">${counts.get(n)}</span></button>`).join("");
     const sel = [...state.channels];
-    el.channelLabel.textContent = sel.length === 0 ? "채널" : sel.length === 1 ? sel[0] : `채널 ${sel.length}`;
+    // 버튼 이름은 짧게: '방송 › 흑백요리사' → '흑백요리사' (휴대폰에서 길면 지도/목록 버튼이 다음 줄로 밀림)
+    el.channelLabel.textContent = sel.length === 0 ? "채널" : sel.length === 1 ? sel[0].replace(BROADCAST, "") : `채널 ${sel.length}`;
     el.channelBtn.classList.toggle("is-on", sel.length > 0);
   }
 
@@ -252,15 +274,13 @@
   function cardHTML(r) {
     const progs = programsOf(r);
     const dist = r._dist != null ? `<span class="sep"></span><span class="dist">${fmtDist(r._dist)}</span>` : "";
-    const thumb = r.videos[0] ? ytThumb(r.videos[0].id) : r.thumb;
     return `<li class="card${state.selected === r.id ? " is-active" : ""}" data-id="${r.id}" tabindex="0">
-      <div class="thumb"><img loading="lazy" src="${esc(thumb)}" alt=""><span class="play" aria-hidden="true">
-        <svg viewBox="0 0 24 24" width="10" height="10"><path fill="currentColor" d="M8 5v14l11-7z"/></svg></span></div>
+      ${thumbHTML(r)}
       <div class="info">
         <h3>${esc(r.name)}</h3>
         <div class="meta"><span class="cat" style="--c:${COLORS[r.category] || COLORS["기타"]}">${esc(r.category)}</span>
           <span>${esc(r.hood || r.region)}</span>${dist}</div>
-        <div class="badges">${progs.filter((p) => p !== REGION_PROGRAM).map((p) => `<span class="badge badge-prog">${esc(p)}</span>`).join("")}${
+        <div class="badges">${tvBadges(r)}${progs.filter((p) => p !== REGION_PROGRAM && !p.startsWith(BROADCAST)).map((p) => `<span class="badge badge-prog">${esc(p)}</span>`).join("")}${
           regionChannels(r).map((c) => `<span class="badge badge-prog">${esc(c)}</span>`).join("")}${
           progs.includes(REGION_PROGRAM) ? regionBadge : ""}${autoBadge(r)}${adBadges(r)}${viewsTag(maxViews(r))}${
           r.videos.length > 1 ? `<span class="badge-count">영상 ${r.videos.length}개</span>` : ""}</div>
@@ -304,21 +324,23 @@
     el.detail.innerHTML = `
       <button type="button" class="back" data-action="back">
         <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="m15 18-6-6 6-6"/></svg>목록</button>
-      <div class="hero"><img src="${esc(r.videos[0] ? ytThumb(r.videos[0].id) : r.thumb)}" alt=""></div>
+      ${thumbHTML(r, "hero")}
       <h2><a class="name-link" href="${naverInfo(r)}" target="_blank" rel="noopener">${esc(r.name)}<span class="chev" aria-hidden="true">›</span></a></h2>
       <p class="name-sub">네이버에서 예약·메뉴 보기</p>
       <div class="meta"><span class="cat" style="--c:${COLORS[r.category] || COLORS["기타"]}">${esc(r.category)}</span>
-        <span>${esc(r.hood || r.region)}</span>${dist}${autoBadge(r)}${programsOf(r).includes(REGION_PROGRAM) ? regionBadge : ""}${adBadges(r)}${viewsTag(maxViews(r))}</div>
+        <span>${esc(r.hood || r.region)}</span>${dist}${tvBadges(r)}${courseTag(r)}${autoBadge(r)}${programsOf(r).includes(REGION_PROGRAM) ? regionBadge : ""}${adBadges(r)}${viewsTag(maxViews(r))}</div>
       <p class="addr"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7Zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5Z"/></svg>
         <span>${esc(r.address)}</span><button type="button" class="copy" data-action="copy">복사</button></p>
-      <h4 class="section-title">나온 영상 <span class="yt">${r.videos.length}</span></h4>
+      ${broadcastsOf(r).length ? `<h4 class="section-title">나온 방송</h4>
+      <ul class="tv-list">${broadcastsOf(r).map((x) => `<li><b>${esc(x.program)}</b> 시즌${esc(x.season)} · ${x.chef ? `${esc(x.chef)} 셰프의 가게` : "출연 셰프의 가게"}</li>`).join("")}</ul>` : ""}
+      ${r.videos.length ? `<h4 class="section-title">나온 영상 <span class="yt">${r.videos.length}</span></h4>
       <ul class="videos">${r.videos.map((v) => `
         <li><a class="video" href="https://www.youtube.com/watch?v=${encodeURIComponent(v.id)}" target="_blank" rel="noopener">
           <div class="thumb"><img loading="lazy" src="${ytThumb(v.id)}" alt=""></div>
           <div><b>${esc(v.title)}</b><span>${esc(videoSource(v))} · ${esc(v.date)}${v.views ? ` · 조회수 ${fmtViews(v.views)}` : ""}${v.ad ? ` ${adBadge(v.ad)}` : ""}</span>${
             v.ad && v.ad_note ? `<span class="ad-note">설명란 표기: “${esc(v.ad_note)}”</span>` : ""}</div></a></li>`).join("")}
       </ul>
-      <p class="yt-source">영상·썸네일·조회수 출처: <a href="https://www.youtube.com" target="_blank" rel="noopener">YouTube</a> · 영상을 누르면 YouTube 에서 열립니다</p>
+      <p class="yt-source">영상·썸네일·조회수 출처: <a href="https://www.youtube.com" target="_blank" rel="noopener">YouTube</a> · 영상을 누르면 YouTube 에서 열립니다</p>` : ""}
       <div class="route-bar">${r.lat != null ? `
       <div class="route-mode" role="radiogroup" aria-label="이동수단">${Object.entries(ROUTE).map(([k, m]) =>
         `<button type="button" data-action="mode" data-mode="${k}" aria-checked="${state.routeMode === k}">${m.label}</button>`).join("")}
