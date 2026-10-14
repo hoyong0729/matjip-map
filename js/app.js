@@ -266,7 +266,7 @@
       </div></li>`;
   }
 
-  function render({ fit = false } = {}) {
+  function render({ fit = false, start = false } = {}) {
     const rows = visible();
     el.count.textContent = rows.length;
     el.sortLabel.textContent = state.subset ? "같은 위치"
@@ -290,7 +290,7 @@
       b.setAttribute("aria-pressed", String(c ? state.cats.has(c) : state.cats.size === 0));
     }
     renderNear();
-    drawMarkers(rows, fit);
+    drawMarkers(rows, fit, start);
   }
 
   // ---------------------------------------------------------------- 상세
@@ -368,6 +368,8 @@
     map = new K.Map(document.getElementById("map"), { center: new K.LatLng(36.4, 127.8), level: 12 });
     map.setMaxLevel(MAX_LEVEL);                         // 핀치·휠·버튼·지역 맞춤 모두 이 레벨까지 (남한 전체가 들어오는 레벨)
     keepInKorea();
+    // 사용자가 지도를 직접 움직였으면, 늦게 끝난 첫 위치 확인이 화면을 옮기지 않게
+    K.event.addListener(map, "dragstart", () => { state.touched = true; });
     // 확대/축소: 기본 컨트롤 대신 화면 디자인에 맞춘 버튼 (모바일은 두 손가락으로)
     const zoom = document.getElementById("zoom");
     zoom.hidden = false;
@@ -415,56 +417,36 @@
   //    setCenter 로 같은 자리에 맞춘다 (레벨 1 = 2배라 배율이 딱 맞아 끊김 없음)
   // 한 손가락 이동·묶음 핀 탭은 카카오 그대로. 기본 줌을 끄면 두 번 탭 확대도 꺼지므로 그것도 직접(1단계 확대)
   // 최대 축소 13: 휴대폰(390x844)·PC(1280x800) 모두 남한 전체(제주 포함)가 들어오는 가장 가까운 레벨 (2026-10-14 측정 —
-  // 12 는 휴대폰 위도 33.9~37.8·PC 34.0~37.7 만 보여 제주·강원 북부가 잘림). 북한은 아래 keepInKorea 로 덜 보이게
+  // 12 는 휴대폰 위도 33.9~37.8·PC 34.0~37.7 만 보여 제주·강원 북부가 잘림)
   const MIN_LEVEL = 1, MAX_LEVEL = 13, PINCH_MAX_STEPS = 4, PINCH_MAX_IN = 2;
 
   const PINCH_MIN = 0.12;             // 이보다 작은 변화(간격 약 8% 이하)는 손떨림으로 보고 무시
   const PINCH_FAST = [2.5, 5];        // 축소 빠르기(초당 log2 비율): 2.5 이상 +1, 5 이상 +2 (반으로 0.4초 / 0.2초)
 
-  // 남한 범위 (제주·마라도, 백령도, 울릉도·독도(동경 131.87) 포함). 화면이 이 밖으로 나가면 손을 뗀 뒤(idle) 부드럽게 되돌린다.
-  // 중심만 보지 않고 화면 가장자리를 본다: 화면이 범위보다 좁으면 가장자리가 범위 안에 있게.
-  // 화면이 범위보다 넓으면(최대 축소) 북쪽 끝을 화면 위쪽(가리는 것 아래)에 맞춘다 — 남는 공간은 남쪽 바다로 (북한이 덜 보임).
-  // 그래도 가리지 않는 부분에 다 안 들어가면(휴대폰) 그 부분의 가운데에
-  const KOREA = { s: 33.0, n: 38.7, w: 124.5, e: 132.0 };
-  // 최대 축소(MAX_LEVEL)에서는 본토(백령도~포항, 제주~고성) 기준: 휴대폰은 경도 폭이 4.7도라 넓은 범위 안에서 동쪽으로
-  // 치우치면 서울·인천이 잘렸다 → 본토 범위로 가운데 맞춤. 울릉도·독도는 한 단계 확대해서 본다
-  const KOREA_MAINLAND = { s: 33.0, n: 38.7, w: 125.9, e: 129.7 };
-  const CLAMP_TOL = 0.01;             // 약 1km 이하로 넘친 것은 그대로 (되돌린 뒤 다시 조금씩 움직이는 것 방지)
+  // 남한 범위 (2026-10-15 느슨하게): 화면 가장자리가 아니라 '지도 중심'만 본다. 중심이 위도 33.0~38.3·경도 124.8~131.0
+  // 안이면 아무것도 안 한다. 독도(동경 131.87)를 볼 때만(울릉도·독도 위도 37.0~37.8) 경도 131.9 까지.
+  // 밖이면 중심만 가장 가까운 경계로 부드럽게 옮기고 레벨은 절대 바꾸지 않는다 (panTo).
+  // 핀치·드래그·하단 시트를 끄는 중에는 안 한다 (손을 뗀 뒤 idle 에서만).
+  // (2026-10-14 판은 화면 가장자리를 검사해, 위로 끌면 손을 뗀 뒤 다른 곳으로 이동해 버렸다)
+  const KOREA = { s: 33.0, n: 38.3, w: 124.8, e: 131.0 };
+  const DOKDO = { s: 37.0, n: 37.8, e: 131.9 };
+  const CLAMP_TOL = 0.005;            // 이 정도(약 500m) 넘친 것은 그대로
 
-  // view = { s, n, w, e, lat, lng } (지금 화면 경계와 지도 중심), pad = 화면 위·아래를 가리는 비율 → 옮길 중심 [lat, lng], 그대로면 null.
-  // 지도 중심 기준으로 옮긴다 (메르카토르라 위·아래 위도의 평균은 실제 중심보다 남쪽 — 평균 기준이면 0.1도씩 어긋났다)
-  function clampCenter(view, box = KOREA, pad = { top: 0, bottom: 0 }) {
-    const span = view.n - view.s;
-    let dLat = 0;
-    if (span >= box.n - box.s) {
-      const top = view.n - pad.top * span, bottom = view.s + pad.bottom * span;     // 가리지 않는 부분
-      dLat = top - bottom >= box.n - box.s ? box.n - top : (box.s + box.n) / 2 - (top + bottom) / 2;
-    } else if (view.n > box.n) dLat = box.n - view.n;
-    else if (view.s < box.s) dLat = box.s - view.s;
-    let dLng = 0;
-    if (view.e - view.w >= box.e - box.w) dLng = (box.w + box.e) / 2 - (view.w + view.e) / 2;
-    else if (view.e > box.e) dLng = box.e - view.e;
-    else if (view.w < box.w) dLng = box.w - view.w;
-    if (Math.abs(dLat) <= CLAMP_TOL && Math.abs(dLng) <= CLAMP_TOL) return null;
-    return [(view.lat ?? (view.s + view.n) / 2) + dLat, (view.lng ?? (view.w + view.e) / 2) + dLng];
+  // 지도 중심 → 옮길 중심 [lat, lng], 범위 안이면 null
+  function clampCenter(lat, lng, box = KOREA) {
+    const east = lat >= DOKDO.s && lat <= DOKDO.n ? DOKDO.e : box.e;
+    const toLat = Math.min(box.n, Math.max(box.s, lat)), toLng = Math.min(east, Math.max(box.w, lng));
+    if (Math.abs(toLat - lat) <= CLAMP_TOL && Math.abs(toLng - lng) <= CLAMP_TOL) return null;
+    return [toLat, toLng];
   }
 
   function keepInKorea() {
     const K = kakao.maps;
-    const mapEl = document.getElementById("map");
-    // 휴대폰: 위 검색창·칩, 아래 접힌 시트 높이 (시트가 열려 있어도 접힌 높이로 — 시트를 열고 닫을 때 지도가 따라 움직이지 않게)
-    const pads = () => {
-      if (!MOBILE.matches) return { top: 0, bottom: 0 };
-      const h = mapEl.clientHeight || window.innerHeight;
-      const top = el.topbar.getBoundingClientRect().bottom + 8;
-      const bottom = Math.min(window.innerHeight - el.panel.getBoundingClientRect().top, 120) + 8;
-      return { top: Math.max(0, top) / h, bottom: Math.max(0, bottom) / h };
-    };
     K.event.addListener(map, "idle", () => {             // idle = 끌기·확대·애니메이션이 끝난 뒤 (끄는 중에는 안 옴)
-      const b = map.getBounds(), sw = b.getSouthWest(), ne = b.getNorthEast(), c = map.getCenter();
-      const to = clampCenter({ s: sw.getLat(), n: ne.getLat(), w: sw.getLng(), e: ne.getLng(), lat: c.getLat(), lng: c.getLng() },
-                             map.getLevel() >= MAX_LEVEL ? KOREA_MAINLAND : KOREA, pads());
-      if (to) map.panTo(new K.LatLng(to[0], to[1]));
+      if (state.pinching || el.app.classList.contains("sheet-dragging")) return;
+      const c = map.getCenter();
+      const to = clampCenter(c.getLat(), c.getLng());
+      if (to) map.panTo(new K.LatLng(to[0], to[1]));     // 중심만 이동, 레벨 그대로
     });
   }
 
@@ -515,6 +497,8 @@
       if (e.touches.length === 2) {
         e.preventDefault();
         map.setDraggable(false);                      // 두 손가락 동안 카카오 이동은 멈추고 직접 따라감
+        state.pinching = true;                        // 남한 범위 되돌리기는 핀치가 끝난 뒤에만
+        state.touched = true;
         const c = mid(e.touches);
         p = { d0: gap(e.touches), d: gap(e.touches), c0: c, c, t0: e.timeStamp };
         mapEl.style.transition = "";
@@ -538,7 +522,7 @@
         const steps = pinchSteps(pinch.d0 / pinch.d, seconds);
         state.lastPinch = { ratio: +(pinch.d0 / pinch.d).toFixed(2), seconds: +seconds.toFixed(2), steps };   // 확인용
         // 지금 손가락 배율·위치에서 목표 배율로 이어서 (단계가 0 이어도 손가락이 옮겨 간 만큼은 지도 이동)
-        zoomAt(steps, pinch.c0, pinch.c).then(() => map.setDraggable(true));
+        zoomAt(steps, pinch.c0, pinch.c).then(() => { map.setDraggable(true); state.pinching = false; });
         lastTap = null;
         return;
       }
@@ -593,7 +577,8 @@
     if (!samePlace) {
       const b = map.getBounds(), sw = b.getSouthWest(), ne = b.getNorthEast();
       const cos = Math.cos(cluster.getCenter().getLat() * Math.PI / 180);
-      const viewSpan = Math.min(ne.getLat() - sw.getLat(), (ne.getLng() - sw.getLng()) * cos);
+      const v = visibleBox(), frac = (v.bottom - v.top) / mapEl().clientHeight;      // 실제로 보이는 높이 비율 (휴대폰)
+      const viewSpan = Math.min((ne.getLat() - sw.getLat()) * frac, (ne.getLng() - sw.getLng()) * cos);
       const span = Math.max(Math.max(...lats) - Math.min(...lats), (Math.max(...lons) - Math.min(...lons)) * cos, 0.002);
       const steps = Math.floor(Math.log2((viewSpan * 0.7) / span));
       target = Math.max(1, level - Math.max(1, steps));
@@ -602,7 +587,7 @@
     map.setLevel(target, { anchor: center, animate: { duration: 400 } });
     K.event.addListener(map, "idle", function once() {
       K.event.removeListener(map, "idle", once);
-      map.panTo(center);                                  // 확대한 구역을 화면 가운데로
+      centerVisible(center, { animate: true });           // 확대한 구역을 보이는 영역 가운데로
       if (samePlace) {                                    // 최대로 확대해도 안 펼쳐짐 → 그 식당들을 시트 목록으로
         state.subset = new Set(ids);
         closeDetail();
@@ -630,7 +615,7 @@
     return true;
   }
 
-  function drawMarkers(rows, fit) {
+  function drawMarkers(rows, fit, start = false) {
     if (!map) return;
     const K = kakao.maps;
     clusterer.clear();
@@ -650,16 +635,59 @@
     highlightPin(state.selected);
     drawNear();
     drawMe();
-    if (fit) fitTo(rows);
+    if (fit) fitTo(rows, { start });
   }
 
+  const mapEl = () => document.getElementById("map");
+
   function padding() {
-    // 지도 위를 가리는 영역(모바일 상단 검색창 · 아래 시트)만큼 여백
+    // 지도 위를 가리는 영역(모바일 상단 검색창·칩 · 아래 시트)만큼 여백 [위, 오른쪽, 아래, 왼쪽]
     if (!MOBILE.matches) return [60, 60, 60, 60];
-    const top = el.topbar.getBoundingClientRect().bottom + 16;
-    const bottom = window.innerHeight - el.panel.getBoundingClientRect().top + 24;
-    return [top, 40, Math.max(bottom, 60), 40];
+    const v = visibleBox();
+    return [v.top + 12, 24, mapEl().clientHeight - v.bottom + 12, 24];
   }
+
+  // 휴대폰에서 실제로 보이는 지도 영역 (지도 기준 px): 위는 검색창·칩 아래, 아래는 하단 시트 위
+  function visibleBox() {
+    const m = mapEl(), h = m.clientHeight, w = m.clientWidth;
+    if (!MOBILE.matches) return { top: 0, bottom: h, left: 0, right: w };
+    const r = m.parentElement.getBoundingClientRect();      // 핀치 중 CSS 변형이 없는 부모 기준
+    const top = Math.max(0, el.topbar.getBoundingClientRect().bottom - r.top);
+    const bottom = Math.min(h, el.panel.getBoundingClientRect().top - r.top);
+    return { top, bottom: Math.max(top + 80, bottom), left: 0, right: w };
+  }
+
+  // latlng 이 '보이는 영역'의 가운데에 오도록 지도 중심을 옮긴다 (레벨 그대로)
+  function centerVisible(latlng, { animate = false } = {}) {
+    const K = kakao.maps, proj = map.getProjection(), v = visibleBox();
+    const p = proj.containerPointFromCoords(latlng);
+    const dx = p.x - (v.left + v.right) / 2, dy = p.y - (v.top + v.bottom) / 2;
+    const c = proj.containerPointFromCoords(map.getCenter());
+    const to = proj.coordsFromContainerPoint(new K.Point(c.x + dx, c.y + dy));
+    if (animate) map.panTo(to); else map.setCenter(to);
+  }
+
+  // 범위를 '보이는 영역' 기준으로 맞춘다. 최대 축소로도 위아래가 다 안 들어가면 남쪽(제주)을 보이는 영역 아래에 맞춤
+  // — 북쪽(서울)은 끌어서 본다 (2026-10-15 사용자 요청)
+  function fitVisible(bounds) {
+    const K = kakao.maps;
+    map.setBounds(bounds, ...padding());
+    const proj = map.getProjection(), v = visibleBox();
+    const sw = proj.containerPointFromCoords(bounds.getSouthWest()), ne = proj.containerPointFromCoords(bounds.getNorthEast());
+    // 최대 축소에서 다 안 들어가면 카카오 setBounds 는 여백을 무시하고 가운데에 둔다 (제주가 시트 밑으로 5px 들어갔었다)
+    // → 직접 보정: 들어가면 보이는 영역 가운데, 세로가 안 들어가면 남쪽 끝을 아래에, 가로가 안 들어가면 서쪽(본토·제주)을 왼쪽에
+    //   (울릉도 같은 동쪽 끝·서울 쪽은 끌어서 본다)
+    const dy = sw.y - ne.y > v.bottom - v.top - 24 ? sw.y - (v.bottom - 12) : (sw.y + ne.y) / 2 - (v.top + v.bottom) / 2;
+    const dx = ne.x - sw.x > v.right - v.left - 24 ? sw.x - (v.left + 12) : (sw.x + ne.x) / 2 - (v.left + v.right) / 2;
+    if (Math.abs(dx) > 1 || Math.abs(dy) > 1) {
+      const c = proj.containerPointFromCoords(map.getCenter());
+      map.setCenter(proj.coordsFromContainerPoint(new K.Point(c.x + dx, c.y + dy)));
+    }
+  }
+
+  // 처음 화면 (위치 권한 없을 때): 수도권 — 서울·인천·수원이 다 보이게
+  const CAPITAL = { s: 37.24, n: 37.70, w: 126.60, e: 127.12 };
+  const START_ME_LEVEL = 7;              // 처음 화면 (위치 권한 있을 때): 내 위치 중심
 
   // 중심(lat, lon)에서 반경 km 가 다 보이는 범위 — 중심이 화면 가운데에 오도록 대칭으로 잡는다
   function circleBounds(lat, lon, km) {
@@ -668,7 +696,8 @@
     return new K.LatLngBounds(new K.LatLng(lat - dLat, lon - dLon), new K.LatLng(lat + dLat, lon + dLon));
   }
 
-  function fitTo(rows) {
+  // start: 처음 화면 (앱을 켤 때·처음 자동 위치 확인 때만) — 내 위치 레벨 7 또는 수도권. 그 밖에 '전체 지역'은 전국
+  function fitTo(rows, { start = false } = {}) {
     const K = kakao.maps;
     const pts = rows.filter((r) => r.lat != null);
     if (state.near) {
@@ -676,17 +705,26 @@
       return;
     }
     if (state.me && !state.region) {
+      if (start) {                          // 처음 화면: 내 위치 중심, 레벨 7
+        map.setLevel(START_ME_LEVEL);
+        centerVisible(new K.LatLng(state.me.lat, state.me.lon));
+        return;
+      }
       // 내 위치를 가운데에 두고, 반경이 있으면 그 원이, '전체'면 가장 가까운 3곳까지 보이게 (최대 5km)
       const nearest = pts.slice(0, 3).map((r) => r._dist).filter((d) => d != null);
       const km = state.meRadiusKm || Math.min(Math.max(...nearest, 0.4), 5);
       map.setBounds(circleBounds(state.me.lat, state.me.lon, km), ...padding());
       return;
     }
+    if (start && !state.region) {            // 처음 화면 (위치 권한 없음): 수도권
+      fitVisible(new K.LatLngBounds(new K.LatLng(CAPITAL.s, CAPITAL.w), new K.LatLng(CAPITAL.n, CAPITAL.e)));
+      return;
+    }
     if (!pts.length) return;
-    if (pts.length === 1) { map.setLevel(4); map.setCenter(new K.LatLng(pts[0].lat, pts[0].lon)); return; }
+    if (pts.length === 1) { map.setLevel(4); centerVisible(new K.LatLng(pts[0].lat, pts[0].lon)); return; }
     const b = new K.LatLngBounds();
     for (const r of pts) b.extend(new K.LatLng(r.lat, r.lon));
-    map.setBounds(b, ...padding());
+    fitVisible(b);
   }
 
   function focusOn(r) {
@@ -784,7 +822,7 @@
         state.q = "";
       }
       if (user) closeDetail();
-      render({ fit: !!map && !state.near });
+      render({ fit: !!map && !state.near, start: !user && !state.touched });   // 처음 자동 확인이면 내 위치 레벨 7
     } catch (e) {
       // 거부·실패해도 화면은 지금처럼(최신 영상 순). 처음에는 한 번만 작게 알리고, 버튼을 눌렀을 때는 이유를 알린다
       if (user) {
@@ -1016,7 +1054,9 @@
       state.meRadiusKm = +b.dataset.km;
       render({ fit: true });
     });
-    el.region.addEventListener("change", () => { state.region = el.region.value; clearSubset(); closeDetail(); render({ fit: true }); });
+    el.region.addEventListener("change", () => {
+      state.region = el.region.value; state.touched = true; clearSubset(); closeDetail(); render({ fit: true });
+    });
     el.channelBtn.addEventListener("click", (e) => { e.stopPropagation(); toggleChannelPop(); });
     el.channelPop.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -1263,7 +1303,7 @@
     try {
       await loadKakao((window.MATJIP_CONFIG || {}).kakaoJsKey);
       initMap();
-      render({ fit: true });
+      render({ fit: true, start: true });                // 처음 화면: 내 위치(권한 있으면) 또는 수도권
     } catch (e) {
       showMapMessage(e.message === "nokey"
         ? "<b>지도를 표시하려면 카카오 JavaScript 키가 필요해요</b><br>.env 에 KAKAO_JS_KEY 를 넣고 python -m matjip export 를 실행하세요"
