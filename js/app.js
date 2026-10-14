@@ -12,6 +12,8 @@
     "분식": "#e5498f", "술집": "#0d8fb0", "카페·디저트": "#a0662b", "기타": "#5b6470", "미분류": "#a3aab3",
   };
   const MOBILE = window.matchMedia("(max-width: 768px)");
+  // 터치 기기 (휴대폰·태블릿·터치 노트북): 핀치를 직접 처리 (enablePinchZoom)
+  const COARSE = { matches: window.matchMedia("(pointer: coarse)").matches || navigator.maxTouchPoints > 0 };
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const ytThumb = (id) => `https://i.ytimg.com/vi/${encodeURIComponent(id)}/mqdefault.jpg`;   // 16:9, 검은 띠 없음
@@ -370,6 +372,7 @@
       })),
     });
     K.event.addListener(clusterer, "clusterclick", onClusterTap);
+    if (COARSE.matches) enablePinchZoom();              // 터치 기기: 핀치를 세기에 맞춰 (PC 마우스 휠은 카카오 기본 그대로)
     // 지도 빈 곳을 탭하면 시트를 접는다. 카카오 'click' 은 터치에서 안 오는 경우가 있어
     // 지도 영역의 짧은 탭(거의 안 움직이고 0.4초 안에 뗌)을 직접 감지한다. 핀·버튼을 탭한 경우는 제외
     const collapse = () => { if (MOBILE.matches && state.sheet !== "closed") setSheet("closed"); };
@@ -383,6 +386,110 @@
       down = null;
       if (tap && !e.target.closest(".pin, .pin-label, .me-dot, .here, button")) collapse();
     }, true);
+  }
+
+  // ---------------------------------------------------------------- 핀치 확대·축소 (터치 기기)
+  // 카카오 기본 핀치는 손가락 간격 비율로만 레벨을 바꾸고(반 → 1단계) 빠르기는 안 봐서, 동네에서 서울까지 4~5번 오므려야 했다.
+  // 기본 줌을 끄고 직접: 단계 = log2(간격 비율) 반올림(살짝이라도 오므리면 1단계) + 빠르기 보너스(+1~2), 한 번에 최대 4단계,
+  // 레벨 MIN_LEVEL~MAX_LEVEL. 오므리는 동안은 지도를 CSS 로 손가락 따라 키우고 줄이다가, 놓으면 목표 배율까지 0.2초 애니메이션 뒤
+  // 그 레벨로 바꾼다 (레벨 1 = 2배라 배율이 딱 맞아 끊김 없음). 기준점은 두 손가락 가운데.
+  // 한 손가락 이동·묶음 핀 탭은 카카오 그대로. 기본 줌을 끄면 두 번 탭 확대도 꺼지므로 그것도 직접(1단계 확대)
+  const MIN_LEVEL = 1, MAX_LEVEL = 13, PINCH_MAX_STEPS = 4;
+  const PINCH_MIN = 0.12;             // 이보다 작은 변화(간격 약 8% 이하)는 손떨림으로 보고 무시
+  const PINCH_FAST = [2.5, 5];        // 빠르기(초당 log2 비율): 2.5 이상 +1, 5 이상 +2 (반으로 0.4초 / 0.2초. 휙 오므리기는 보통 0.15~0.3초)
+
+  function pinchSteps(ratio, seconds) {
+    const raw = Math.log2(ratio);                     // 오므리면 + (축소), 벌리면 - (확대)
+    if (Math.abs(raw) < PINCH_MIN) return 0;
+    const speed = Math.abs(raw) / Math.max(seconds, 0.05);
+    const bonus = speed >= PINCH_FAST[1] ? 2 : speed >= PINCH_FAST[0] ? 1 : 0;
+    return Math.sign(raw) * Math.min(PINCH_MAX_STEPS, Math.max(1, Math.round(Math.abs(raw))) + bonus);
+  }
+
+  function zoomAt(steps, x, y, { animate = true } = {}) {
+    const K = kakao.maps;
+    const target = Math.min(MAX_LEVEL, Math.max(MIN_LEVEL, map.getLevel() + steps));
+    if (target === map.getLevel()) return Promise.resolve(0);
+    const real = target - map.getLevel();
+    const mapEl = document.getElementById("map");
+    const anchor = map.getProjection().coordsFromContainerPoint(new K.Point(x, y));
+    const done = () => {
+      mapEl.style.transition = mapEl.style.transform = mapEl.style.transformOrigin = "";
+      map.setLevel(target, { anchor });                // 배율이 이미 맞아 있으니 바로 바꿔도 안 튄다
+    };
+    if (!animate) { done(); return Promise.resolve(real); }
+    return new Promise((resolve) => {
+      mapEl.style.transformOrigin = `${x}px ${y}px`;
+      mapEl.style.transition = "transform .2s ease-out";
+      requestAnimationFrame(() => { mapEl.style.transform = `scale(${2 ** -real})`; });
+      setTimeout(() => { done(); resolve(real); }, 210);
+    });
+  }
+
+  function enablePinchZoom() {
+    const mapEl = document.getElementById("map");
+    map.setZoomable(false);
+    let p = null, lastTap = null;
+    const mid = (t) => {
+      const r = mapEl.getBoundingClientRect();
+      return [(t[0].clientX + t[1].clientX) / 2 - r.left, (t[0].clientY + t[1].clientY) / 2 - r.top];
+    };
+    const gap = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+    mapEl.addEventListener("touchstart", (e) => {
+      if (e.touches.length === 2) {
+        e.preventDefault();
+        map.setDraggable(false);                      // 두 손가락 동안 지도 이동 멈춤
+        p = { d0: gap(e.touches), d: gap(e.touches), c: mid(e.touches), t0: e.timeStamp };
+        mapEl.style.transition = "";
+        mapEl.style.transformOrigin = `${p.c[0]}px ${p.c[1]}px`;
+      }
+    }, { passive: false, capture: true });
+    mapEl.addEventListener("touchmove", (e) => {
+      if (!p || e.touches.length < 2) return;
+      e.preventDefault();                             // 브라우저 화면 확대 막기
+      p.d = gap(e.touches);
+      const scale = Math.min(16, Math.max(1 / 16, p.d / p.d0));
+      mapEl.style.transform = `scale(${scale})`;       // 손가락을 그대로 따라감
+    }, { passive: false, capture: true });
+    const end = (e) => {
+      if (p && e.touches.length < 2) {
+        const pinch = p;
+        p = null;
+        const seconds = (e.timeStamp - pinch.t0) / 1000;
+        const steps = pinchSteps(pinch.d0 / pinch.d, seconds);
+        state.lastPinch = { ratio: +(pinch.d0 / pinch.d).toFixed(2), seconds: +seconds.toFixed(2), steps };   // 확인용
+        if (steps) {
+          // 지금 손가락 배율에서 목표 배율로 이어서 애니메이션
+          zoomAt(steps, ...pinch.c).then(() => map.setDraggable(true));
+        } else {
+          mapEl.style.transition = "transform .15s ease-out";
+          mapEl.style.transform = "scale(1)";
+          setTimeout(() => { mapEl.style.transition = mapEl.style.transform = ""; map.setDraggable(true); }, 160);
+        }
+        lastTap = null;
+        return;
+      }
+      // 두 번 탭 → 1단계 확대 (빈 지도에서만. 핀·묶음 원·버튼 제외)
+      if (e.touches.length === 0 && e.changedTouches.length === 1 && !e.target.closest(".pin, .pin-label, button")) {
+        const t = e.changedTouches[0], now = e.timeStamp;
+        if (lastTap && now - lastTap.t < 300 && Math.hypot(t.clientX - lastTap.x, t.clientY - lastTap.y) < 30) {
+          const r = mapEl.getBoundingClientRect();
+          zoomAt(-1, t.clientX - r.left, t.clientY - r.top);
+          lastTap = null;
+        } else lastTap = { t: now, x: t.clientX, y: t.clientY };
+      }
+    };
+    mapEl.addEventListener("touchend", end, { capture: true });
+    mapEl.addEventListener("touchcancel", end, { capture: true });
+    // 기본 줌을 끄면 마우스 휠도 꺼지므로 (터치 노트북) 휠 한 번에 1단계
+    let wheelAt = 0;
+    mapEl.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      if (e.timeStamp - wheelAt < 250 || !e.deltaY) return;
+      wheelAt = e.timeStamp;
+      const r = mapEl.getBoundingClientRect();
+      zoomAt(e.deltaY > 0 ? 1 : -1, e.clientX - r.left, e.clientY - r.top);
+    }, { passive: false });
   }
 
   function pinNode(r) {
@@ -1062,6 +1169,6 @@
     }
   }
 
-  window.matjipDebug = { state, routeLinks, visitsRange, level: () => map?.getLevel() };
+  window.matjipDebug = { state, routeLinks, visitsRange, level: () => map?.getLevel(), get map() { return map; } };
   main();
 })();
