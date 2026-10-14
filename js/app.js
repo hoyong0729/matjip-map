@@ -68,6 +68,11 @@
   const regionChannels = (r) => [...new Set(r.videos.filter((v) => v.program === REGION_PROGRAM).map((v) => v.channel).filter(Boolean))];
   const regionBadge = `<span class="badge badge-region" title="채널이 아니라 지역 검색어로 찾은 영상에서 여러 증거로 찾은 식당">지역 검색</span>`;
   const videoSource = (v) => (v.program === REGION_PROGRAM ? `${v.channel || "유튜브"} · ${REGION_PROGRAM}` : v.program);
+  // 영상의 지원·광고 표기 (export 가 자동매칭·지역검색 연결에만 넣음): 지자체·기관 지원 제작 / 업체 유료광고·협찬
+  const AD_LABEL = { "지원": "지원 영상", "광고": "광고 영상" };
+  const AD_TITLE = { "지원": "지자체·기관의 지원을 받아 만든 영상", "광고": "업체의 유료광고·협찬이 포함된 영상" };
+  const adBadge = (k) => `<span class="badge badge-ad" title="${AD_TITLE[k]}">${AD_LABEL[k]}</span>`;
+  const adBadges = (r) => ["지원", "광고"].filter((k) => r.videos.some((v) => v.ad === k)).map(adBadge).join("");
   const naverSearch = (r) => `https://map.naver.com/p/search/${encodeURIComponent(`${r.name} ${r.subregion || r.region}`)}`;
 
   // ---------------------------------------------------------------- 길찾기 (휴대폰: 앱 바로, 없으면 웹 / PC: 웹)
@@ -243,7 +248,7 @@
           <span>${esc(r.hood || r.region)}</span>${dist}</div>
         <div class="badges">${progs.filter((p) => p !== REGION_PROGRAM).map((p) => `<span class="badge badge-prog">${esc(p)}</span>`).join("")}${
           regionChannels(r).map((c) => `<span class="badge badge-prog">${esc(c)}</span>`).join("")}${
-          progs.includes(REGION_PROGRAM) ? regionBadge : ""}${autoBadge(r)}${
+          progs.includes(REGION_PROGRAM) ? regionBadge : ""}${autoBadge(r)}${adBadges(r)}${
           r.videos.length > 1 ? `<span class="badge-count">영상 ${r.videos.length}개</span>` : ""}</div>
       </div></li>`;
   }
@@ -283,7 +288,7 @@
       <div class="hero"><img src="${esc(r.videos[0] ? ytThumb(r.videos[0].id) : r.thumb)}" alt=""></div>
       <h2>${esc(r.name)}</h2>
       <div class="meta"><span class="cat" style="--c:${COLORS[r.category] || COLORS["기타"]}">${esc(r.category)}</span>
-        <span>${esc(r.hood || r.region)}</span>${dist}${autoBadge(r)}${programsOf(r).includes(REGION_PROGRAM) ? regionBadge : ""}</div>
+        <span>${esc(r.hood || r.region)}</span>${dist}${autoBadge(r)}${programsOf(r).includes(REGION_PROGRAM) ? regionBadge : ""}${adBadges(r)}</div>
       <p class="addr"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7Zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5Z"/></svg>
         <span>${esc(r.address)}</span><button type="button" class="copy" data-action="copy">복사</button></p>
       ${r.lat != null ? `
@@ -299,7 +304,7 @@
       <ul class="videos">${r.videos.map((v) => `
         <li><a class="video" href="https://www.youtube.com/watch?v=${encodeURIComponent(v.id)}" target="_blank" rel="noopener">
           <div class="thumb"><img loading="lazy" src="${ytThumb(v.id)}" alt=""></div>
-          <div><b>${esc(v.title)}</b><span>${esc(videoSource(v))} · ${esc(v.date)}</span></div></a></li>`).join("")}
+          <div><b>${esc(v.title)}</b><span>${esc(videoSource(v))} · ${esc(v.date)}${v.ad ? ` ${adBadge(v.ad)}` : ""}</span></div></a></li>`).join("")}
       </ul>`;
     el.detail.hidden = false;
     el.scroll.hidden = true;

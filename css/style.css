@@ -273,6 +273,9 @@ a { color: inherit; text-decoration: none; }
 
 .badge-auto { border-color: #c9d8ff; background: #f2f6ff; color: #3159c9; }
 .badge-region { border-color: #c8ead9; background: #effaf4; color: #1d7a4f; }
+/* 지원 영상·광고 영상: 회색 계열로 작게 (식당 정보보다 눈에 덜 띄게) */
+.badge-ad { border-color: #e3e5e8; background: #f4f5f7; color: #6b7280; font-size: 11px; font-weight: 500; padding: 1px 6px; }
+.video span .badge-ad { display: inline-block; margin: 0 0 0 4px; vertical-align: 1px; }
 /* 카드 배지 순서: [프로그램] [자동 매칭] 영상 N개 — 프로그램은 진하게, 자동 매칭은 파랑, 영상 수는 글자만 */
 .badges { align-items: center; }
 .badge-prog { border-color: transparent; background: var(--bg-2); color: var(--ink); }
