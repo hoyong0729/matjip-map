@@ -14,6 +14,7 @@
   const MOBILE = window.matchMedia("(max-width: 768px)");
   const CREDIT = "개발자 유니주니 · 후원 강남오빠(안호성)";   // 제작자 표시 (index.html 의 PC 패널 문구와 같게)
   const ABOUT_LINK = `<a class="about-link" href="about.html">이용 안내</a>`;   // 이용 안내(개인정보·출처·정정 요청) 페이지
+  const COPYRIGHT = "© 2026 맛도리(유니주니). 화면·데이터의 무단 복제·배포를 금합니다.";   // 무단 복제 대비 (index.html PC 패널·about.html 과 같은 문구, LICENSE)
   // 터치 기기 (휴대폰·태블릿·터치 노트북): 핀치를 직접 처리 (enablePinchZoom)
   const COARSE = { matches: window.matchMedia("(pointer: coarse)").matches || navigator.maxTouchPoints > 0 };
   const $ = (id) => document.getElementById(id);
@@ -1285,7 +1286,7 @@
       const [d, t] = data.updated_at.split(" ");
       const [, m, day] = d.split("-");
       el.updated.innerHTML = `<span class="upd-main">마지막 업데이트 <b>${+m}/${+day} ${esc(t || "")}</b></span>`
-        + `<span class="credit credit-pill">${CREDIT} · ${ABOUT_LINK}</span>`;   // 휴대폰: 둘째 줄 제작자 표시 + 이용 안내
+        + `<span class="credit credit-pill">${CREDIT} · ${ABOUT_LINK}<span class="copyright">${COPYRIGHT}</span></span>`;   // 휴대폰: 둘째 줄 제작자·이용 안내, 셋째 줄 저작권
     } else el.updated.hidden = true;
     renderRegionOptions();
     renderChips();
