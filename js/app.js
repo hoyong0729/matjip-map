@@ -984,13 +984,29 @@
   // ---------------------------------------------------------------- 방문자 수 (GoatCounter 공개 카운터)
   // GoatCounter 사이트 설정의 'Allow adding visitor counts on your website' 를 켜야 숫자가 온다 (꺼져 있으면 403 → 숨김).
   // 로컬에서는 index.html 이 count.js 를 안 불러와 window.goatcounter 가 없으니 카운터도 안 보인다
+  //
+  // 공개 카운터의 성질 (GoatCounter 소스 handlers/vcounter.go, 2026-10-14 확인):
+  //  - start·end 는 날짜만 받고 **UTC 0시**로 읽는다 (계정 시간대 Asia/Seoul 은 안 씀). end 는 그날 0시 전까지
+  //    → 한국 날짜를 보내면 한국 0~9시에는 UTC 로 '내일'이라 늘 0 이었다. 그래서 UTC 날짜를 보낸다:
+  //      '오늘' = 한국 시간 오전 9시부터 (한국 0~9시에는 어제 9시부터). 한국 자정 기준은 공개 카운터로는 표현할 수 없다
+  //  - 같은 주소의 응답은 최대 4시간 저장돼(Expires +4h, 앞단 Varnish) 늦게 바뀐다. 모르는 파라미터는 저장 키에서 빠져
+  //    소용없고, start·end 가 다르면 새로 계산한다 → end 를 15분마다 하루씩 미래로 바꿔(결과는 같음) 최대 15분 지연으로
   const VISITS_URL = "https://matdori.goatcounter.com/counter/TOTAL.json";
+  const VISITS_BUCKET_MIN = 15;
+  const utcDate = (t) => new Date(t).toISOString().slice(0, 10);
+  function visitsRange(now = Date.now()) {
+    const day = utcDate(now);
+    const bucket = Math.floor((now % 864e5) / (VISITS_BUCKET_MIN * 6e4));           // 0 ~ 95 (UTC 하루 안의 15분 칸)
+    const end = utcDate(Date.parse(`${day}T00:00:00Z`) + (1 + bucket) * 864e5);      // 내일 ~ 96일 뒤 (미래라 결과는 같음)
+    return { today: `?start=${day}&end=${end}`, total: `?start=2000-01-01&end=${end}` };
+  }
+
   async function loadVisits() {
     if (!window.goatcounter) return;
-    const today = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);       // 한국 날짜
-    const get = (q) => fetch(VISITS_URL + q).then((r) => (r.ok ? r.json() : null))
+    const q = visitsRange();
+    const get = (s) => fetch(VISITS_URL + s).then((r) => (r.ok ? r.json() : null))
       .then((d) => (d && d.count != null ? String(d.count) : null)).catch(() => null);
-    const [day, total] = await Promise.all([get(`?start=${today}`), get("")]);
+    const [day, total] = await Promise.all([get(q.today), get(q.total)]);
     if (total == null) return;
     el.updated.insertAdjacentHTML("beforeend", `<span class="visits">${
       day != null ? ` · 오늘 방문 <b>${esc(day)}</b>` : ""} · 누적 <b>${esc(total)}</b></span>`);
@@ -1046,6 +1062,6 @@
     }
   }
 
-  window.matjipDebug = { state, routeLinks, level: () => map?.getLevel() };
+  window.matjipDebug = { state, routeLinks, visitsRange, level: () => map?.getLevel() };
   main();
 })();
