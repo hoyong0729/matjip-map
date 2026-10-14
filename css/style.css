@@ -350,6 +350,10 @@ a { color: inherit; text-decoration: none; }
   box-shadow: var(--shadow-1); font-size: 12.5px; color: var(--ink-2); font-weight: 500;
 }
 .updated b { color: var(--ink); font-weight: 700; }
+/* 제작자 표시: 회색 작은 글씨, 가운데. PC 는 목록 패널 맨 아래(.credit-panel), 휴대폰은 '마지막 업데이트' 칸 둘째 줄(.credit-pill) */
+.credit { margin: 0; font-size: 11px; font-weight: 400; color: var(--ink-3); text-align: center; letter-spacing: 0; }
+.credit-panel { flex: none; padding: 7px 12px 8px; border-top: 1px solid var(--line); background: var(--bg-2); }
+.credit-pill { display: none; }
 .zoom {
   position: absolute; right: 16px; bottom: 28px; z-index: 2;
   display: flex; flex-direction: column; border-radius: 12px; overflow: hidden;
@@ -491,7 +495,10 @@ a { color: inherit; text-decoration: none; }
   .seg { background: #fff; box-shadow: var(--shadow-1); }
   .chips { margin: 0 -12px; padding: 2px 12px 6px; }
   .chip { border-color: transparent; box-shadow: var(--shadow-1); }
-  .updated { top: auto; right: 12px; bottom: calc(var(--sheet-visible, 40vh) + 12px); font-size: 12px; transition: bottom .25s; }
+  .updated { top: auto; right: 12px; bottom: calc(var(--sheet-visible, 40vh) + 12px); font-size: 12px; transition: bottom .25s;
+             display: flex; flex-direction: column; align-items: center; gap: 1px; border-radius: 14px; padding: 6px 12px; }
+  .updated .credit-pill { display: block; }
+  .credit-panel { display: none; }                                   /* 휴대폰 시트에는 안 넣음 (위 칸에 있음) */
   .app.has-install[data-sheet="closed"] .updated { bottom: calc(var(--sheet-visible, 40vh) + var(--install-h, 0px) + 20px); }
   .zoom { display: none; }
   .app[data-view="list"] .topbar { background: #fff; }

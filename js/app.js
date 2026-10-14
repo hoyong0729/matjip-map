@@ -12,6 +12,7 @@
     "분식": "#e5498f", "술집": "#0d8fb0", "카페·디저트": "#a0662b", "기타": "#5b6470", "미분류": "#a3aab3",
   };
   const MOBILE = window.matchMedia("(max-width: 768px)");
+  const CREDIT = "개발자 유니주니 · 후원 강남오빠(안호성)";   // 제작자 표시 (index.html 의 PC 패널 문구와 같게)
   // 터치 기기 (휴대폰·태블릿·터치 노트북): 핀치를 직접 처리 (enablePinchZoom)
   const COARSE = { matches: window.matchMedia("(pointer: coarse)").matches || navigator.maxTouchPoints > 0 };
   const $ = (id) => document.getElementById(id);
@@ -1122,7 +1123,7 @@
       .then((d) => (d && d.count != null ? String(d.count) : null)).catch(() => null);
     const [day, total] = await Promise.all([get(q.today), get(q.total)]);
     if (total == null) return;
-    el.updated.insertAdjacentHTML("beforeend", `<span class="visits">${
+    (el.updated.querySelector(".upd-main") || el.updated).insertAdjacentHTML("beforeend", `<span class="visits">${
       day != null ? ` · 오늘 방문 <b>${esc(day)}</b>` : ""} · 누적 <b>${esc(total)}</b></span>`);
     el.updated.hidden = false;
   }
@@ -1149,7 +1150,8 @@
     if (data.updated_at) {
       const [d, t] = data.updated_at.split(" ");
       const [, m, day] = d.split("-");
-      el.updated.innerHTML = `마지막 업데이트 <b>${+m}/${+day} ${esc(t || "")}</b>`;
+      el.updated.innerHTML = `<span class="upd-main">마지막 업데이트 <b>${+m}/${+day} ${esc(t || "")}</b></span>`
+        + `<span class="credit credit-pill">${CREDIT}</span>`;           // 휴대폰: 둘째 줄 제작자 표시
     } else el.updated.hidden = true;
     renderRegionOptions();
     renderChips();
