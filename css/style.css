@@ -471,7 +471,7 @@ a { color: inherit; text-decoration: none; }
   .toast { top: calc(var(--sheet-top, 160px) + 18px); bottom: auto; white-space: normal; text-align: center; border-radius: 14px; }
   .filter-row { margin-top: 10px; gap: 6px; }
   .select-pill { box-shadow: var(--shadow-1); border-color: transparent; }
-  .select-pill select { max-width: 132px; padding-right: 28px; }
+  .select-pill select { max-width: 144px; padding-right: 28px; }   /* '전체 지역 (274)' 이 잘리지 않게 */
   .pill-btn { box-shadow: var(--shadow-1); border-color: transparent; max-width: 96px; padding: 0 10px 0 12px; }
   .pill-btn.is-on { border-color: var(--ink); }
   /* 홈 화면 앱(상태바·홈 표시줄 아래로 깔림): 시트 아래쪽 내용이 홈 표시줄에 가리지 않게 */
