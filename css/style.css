@@ -457,6 +457,25 @@ a { color: inherit; text-decoration: none; }
                flex-wrap: wrap; gap: 6px 10px; font-size: 12px; padding: 9px 10px 9px 12px; }
   .yt-notice-actions { margin-left: auto; }
   .app[data-sheet="full"] .yt-notice { display: none; }                  /* 시트를 다 펼치면 시트와 겹치므로 숨김 */
+  /* 키보드가 올라오면(검색 입력 중) 위·아래 안내 띠를 모두 숨김 — 입력·검색 결과를 가리지 않게 (app.js kbd-open) */
+  .app.kbd-open .yt-notice, .app.kbd-open .install-bar { display: none; }
+  /* 위쪽 안내가 떠 있으면 알림(토스트)은 그 아래로 — 안내 글자를 덮지 않게 */
+  .app.has-top-notice:not([data-sheet="full"]):not(.kbd-open) .toast { top: calc(var(--notice-bottom, 240px) + 10px); }
+  /* 인앱 안내의 설명 단계: 글자는 한 줄 전체, 버튼은 그 아래 오른쪽 */
+  .inapp-bar:not([data-state="open"]) p { flex-basis: 100%; }
+}
+.install-bar[data-kind="iosOther"] .install-icon { display: none; }      /* 아이폰 다른 브라우저: 제목이 안 끊기게 아이콘 자리 비움 */
+
+/* 인앱 브라우저 안내: 자리·숨김은 첫 방문 안내(.yt-notice)와 같음. [브라우저로 열기]·[주소 복사]·✕ */
+.inapp-bar p b { display: block; color: var(--ink); font-size: 13px; }
+.inapp-copy {
+  border: 1px solid var(--line-2); border-radius: 10px; padding: 6px 11px; background: #fff;
+  color: var(--ink); font: inherit; font-weight: 700; cursor: pointer; white-space: nowrap;
+}
+.yt-notice-ok { white-space: nowrap; }
+.bar-x {
+  flex: none; display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 8px;
+  background: transparent; color: var(--ink-3); cursor: pointer;
 }
 
 /* 앱 설치 안내 띠 (휴대폰만): 접힌 시트 바로 위, 시트를 열거나 끄는 중엔 숨김 */
@@ -475,10 +494,7 @@ a { color: inherit; text-decoration: none; }
   flex: none; height: 34px; padding: 0 14px; border: 0; border-radius: 999px;
   background: var(--accent); color: #fff; font-size: 13px; font-weight: 700;
 }
-.install-close {
-  flex: none; height: 34px; padding: 0 8px; border: 0; border-radius: 8px;
-  background: transparent; color: var(--ink-3); font-size: 13px; font-weight: 600;
-}
+.install-close { height: 34px; }
 @keyframes install-in { from { opacity: 0; transform: translateY(8px); } }
 @media (prefers-reduced-motion: reduce) { .install-bar { animation: none; } }
 @media (min-width: 769px) { .install-bar { display: none !important; } }

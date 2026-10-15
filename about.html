@@ -26,6 +26,8 @@
     .key { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
     .key li { background: var(--bg-2); border-radius: 12px; padding: 12px 14px; color: var(--ink); }
     .key b { font-weight: 700; }
+    .howto { display: grid; gap: 6px; }
+    .howto b { color: var(--ink); }
     details { margin-top: 20px; border-top: 1px solid var(--line); }
     summary { cursor: pointer; padding: 14px 0; font-weight: 700; color: var(--ink); list-style: none; }
     summary::-webkit-details-marker { display: none; }
@@ -56,6 +58,16 @@
     <li>정정·삭제 요청: <a href="mailto:hoyong0729@gmail.com">hoyong0729@gmail.com</a></li>
   </ul>
 
+  <h2 id="install">앱으로 설치하는 방법</h2>
+  <p>홈 화면에 추가하면 주소창 없이 앱처럼 열려요.</p>
+  <ul class="howto">
+    <li><b>안드로이드</b>: 크롬으로 열고 → 화면 아래 ‘설치’ 버튼, 또는 오른쪽 위 ⋮ → ‘홈 화면에 추가’
+      (삼성 인터넷은 메뉴 ≡ → ‘현재 페이지 추가’ → ‘홈 화면’)</li>
+    <li><b>아이폰</b>: 사파리로 열고 → 공유 버튼 → ‘홈 화면에 추가’</li>
+    <li><b>카카오톡에서 열었을 때</b>: 먼저 ⋯ → ‘다른 브라우저로 열기’(아이폰은 ‘Safari로 열기’)로 연 다음 위 방법대로 해 주세요.
+      네이버·인스타그램 앱 안에서 열었을 때도 같아요.</li>
+  </ul>
+
   <details>
     <summary>자세히 보기</summary>
 
@@ -77,9 +89,10 @@
       지도를 그리려고 화면에 보이는 지역의 지도 이미지는 카카오에서 받아 와요.</p>
 
     <h2>기기에 저장하는 것</h2>
-    <p>이 기기 브라우저 저장소(localStorage)에 값 다섯 개만 둬요:
+    <p>이 기기 브라우저 저장소(localStorage)에 값 일곱 개만 둬요:
       <code>matjip-yt-notice</code>(첫 안내 확인 시각), <code>matjip-installed</code>(홈 화면 설치 여부),
-      <code>matjip-install-dismissed</code>(설치 안내 닫은 시각), <code>matjip-app-open</code>(앱으로 연 날짜 — 하루 한 번만 세려고),
+      <code>matjip-install-dismissed</code>(설치 안내 닫은 시각), <code>matjip-ios-install-dismissed</code>(아이폰 설치 안내 닫은 시각),
+      <code>matjip-inapp-dismissed</code>(‘기본 브라우저에서 열기’ 안내 닫은 시각), <code>matjip-app-open</code>(앱으로 연 날짜 — 하루 한 번만 세려고),
       <code>matjip-visits</code>(마지막으로 받은 방문 수 — 통계 서버가 잠깐 안 될 때 보여 주려고).
       사이트 데이터를 지우면 사라져요.</p>
 

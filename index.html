@@ -149,6 +149,17 @@
         <div class="yt-notice-actions"><a class="yt-notice-more" href="about.html">이용 안내</a>
           <button type="button" class="yt-notice-ok" id="ytNoticeOk">확인</button></div>
       </div>
+      <!-- 인앱 브라우저(카카오톡·네이버·인스타그램 등) 안내: 거기서는 홈 화면 설치가 안 된다. 자리·숨김 규칙은 위 첫 방문 안내와 같다.
+           한 번에 안내 하나만 (인앱 > 첫 방문 안내 > 설치 안내, app.js claimBanner). ✕ 는 7일 (localStorage matjip-inapp-dismissed) -->
+      <div class="yt-notice inapp-bar" id="inappBar" role="region" aria-label="브라우저 안내" hidden>
+        <p id="inappText"></p>
+        <div class="yt-notice-actions">
+          <button type="button" class="yt-notice-ok" id="inappOpen" hidden>브라우저로 열기</button>
+          <button type="button" class="inapp-copy" id="inappCopy" hidden>주소 복사</button>
+          <button type="button" class="bar-x" id="inappClose" aria-label="닫기">
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M6 6l12 12M18 6 6 18"/></svg></button>
+        </div>
+      </div>
       <div class="updated" id="updated"></div>
       <div class="zoom" id="zoom" hidden>
         <button type="button" data-zoom="-1" aria-label="확대">
@@ -161,12 +172,14 @@
 
     <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
-    <!-- 앱 설치 안내 (휴대폰, 시트가 접혀 있을 때만 그 바로 위). 안드로이드: [설치] → 설치 창 / 아이폰: 공유 → 홈 화면에 추가 -->
+    <!-- 앱 설치 안내 (휴대폰, 시트가 접혀 있을 때만 그 바로 위). 안드로이드: [설치] → 설치 창 / 삼성 인터넷: 메뉴 안내 /
+         아이폰 사파리: 공유 → 홈 화면에 추가 / 아이폰 다른 브라우저: 사파리에서 열라는 안내 + [주소 복사] -->
     <div class="install-bar" id="installBar" role="region" aria-label="앱 설치 안내" hidden>
       <img class="install-icon" src="icons/icon-192.png" alt="" width="36" height="36">
       <div class="install-text" id="installText"></div>
       <button type="button" class="install-go" id="installGo" hidden>설치</button>
-      <button type="button" class="install-close" id="installClose">닫기</button>
+      <button type="button" class="install-close bar-x" id="installClose" aria-label="닫기">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M6 6l12 12M18 6 6 18"/></svg></button>
     </div>
   </div>
 

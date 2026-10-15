@@ -55,6 +55,7 @@
     subsetClear: $("subsetClear"), famousBtn: $("famousBtn"),
     ytNotice: $("ytNotice"), ytNoticeOk: $("ytNoticeOk"),
     installBar: $("installBar"), installText: $("installText"), installGo: $("installGo"), installClose: $("installClose"),
+    inappBar: $("inappBar"), inappText: $("inappText"), inappOpen: $("inappOpen"), inappCopy: $("inappCopy"), inappClose: $("inappClose"),
   };
 
   // ---------------------------------------------------------------- 유틸
@@ -1155,20 +1156,32 @@
     el.mapMessage.hidden = false;
   }
 
-  // ---------------------------------------------------------------- 앱 설치 안내 (휴대폰)
-  // 안드로이드 크롬: beforeinstallprompt 를 잡아 두었다가 [설치] → 바로 설치 창
-  // 아이폰 사파리: 설치 API 가 없어 '공유 → 홈 화면에 추가' 안내 / 아이폰의 다른 브라우저: 사파리에서 열라는 안내
-  // 앱으로 실행 중·설치함·[닫기](30일) 이면 띄우지 않는다. localStorage 에는 이 두 표시만 둔다 (위치는 저장 안 함)
+  // ---------------------------------------------------------------- 안내 띠 (휴대폰): 인앱 브라우저 · 앱 설치
+  // 한 번에 하나만 띄운다: 인앱 브라우저 안내 > 유튜브 첫 방문 안내 > 설치 안내. 앞의 것을 띄운 방문에는 그것을 닫아도
+  // 다음 것을 띄우지 않고 다음 방문에 띄운다 (claimBanner). 앱으로 실행 중(standalone)이면 인앱·설치 안내는 없다.
+  //  - 인앱 브라우저(카카오톡·네이버 앱·인스타그램·페이스북·라인·다음·에브리타임): 홈 화면 설치가 안 되므로 기본 브라우저로 보낸다.
+  //    카카오톡은 kakaotalk://web/openExternal?url= (안드로이드·아이폰). 카카오 공식 문서에는 없고 DevTalk·개발자 글에서 널리
+  //    쓰이는 방식이다 (2026-10-15 확인: 카카오는 'DevTalk 에서 외부 브라우저 이동은 지원하지 않음, 카카오톡 고객센터 문의' 답변뿐 —
+  //    devtalk.kakao.com/t/topic/131149, /t/branch/151358). 그래서 1.5초 뒤에도 이 화면이 보이면 안 된 것으로 보고
+  //    메뉴 안내 + [주소 복사] 로 바꾼다. 안드로이드 다른 인앱은 intent:// 로 크롬, 아이폰 다른 인앱은 웹에서 사파리를 여는 방법이 없어 안내만
+  //  - 안드로이드 크롬 등: beforeinstallprompt 를 잡아 두었다가 [설치] → 바로 설치 창. 삼성 인터넷에서 3초 안에 안 오면 메뉴 안내
+  //  - 아이폰 사파리: 설치 API 가 없어 '공유 → 홈 화면에 추가' 안내 / 아이폰 다른 브라우저: 사파리에서 열라는 안내 + [주소 복사]
+  // 닫은 시각만 기기에 둔다 (인앱 7일 · 아이폰 설치 14일 · 안드로이드 설치 30일). 위치는 저장 안 함
   const INSTALL_DISMISSED = "matjip-install-dismissed", INSTALLED = "matjip-installed";
-  const DISMISS_DAYS = 30;
-  const IC_SHARE = `<svg class="ios-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 3v11M8 7l4-4 4 4M8 10H6v10h12V10h-2"/></svg>`;
-  const IC_ADD = `<svg class="ios-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M7 4h10a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3ZM12 8v8M8 12h8"/></svg>`;
+  const IOS_DISMISSED = "matjip-ios-install-dismissed", INAPP_DISMISSED = "matjip-inapp-dismissed";
+  const DISMISS_DAYS = { [INSTALL_DISMISSED]: 30, [IOS_DISMISSED]: 14, [INAPP_DISMISSED]: 7 };
+  const INAPP_UA = /KAKAOTALK|NAVER\(inapp|Instagram|FBAN|FBAV|FB_IAB|\bLine\/|DaumApps|everytimeApp/i;
+  const IC_SHARE = `<svg class="ios-ic" viewBox="0 0 24 24" width="16" height="16" aria-label="공유" role="img"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 3v11M8 7l4-4 4 4M8 10H6v10h12V10h-2"/></svg>`;
   const INSTALL_TEXT = {
     prompt: "<b>맛도리를 홈 화면에 설치하기</b>주소창 없이 앱처럼 바로 열려요",
-    ios: `<b>맛도리를 홈 화면에 추가하기</b>${IC_SHARE} 공유 → ${IC_ADD} 홈 화면에 추가 <small>(공유가 안 보이면 ··· 먼저)</small>`,
-    iosOther: "<b>사파리에서 열어 주세요</b>Safari 에서 맛도리를 홈 화면에 추가할 수 있어요",
+    samsung: "<b>맛도리를 홈 화면에 추가하기</b>메뉴(≡) → 「현재 페이지 추가」 → 「홈 화면」",
+    ios: `<b>홈 화면에 추가하면 앱처럼 쓸 수 있어요</b>아래 ${IC_SHARE} → 「홈 화면에 추가」 <small>(공유가 안 보이면 ··· 먼저)</small>`,
+    iosOther: "<b>사파리에서 열어야 설치할 수 있어요</b>주소를 복사해 Safari 에 붙여넣어 주세요",
   };
-  let installPrompt = null;
+  const INAPP_TITLE = "<b>앱으로 설치하려면 기본 브라우저에서 열어주세요</b>";
+  const INAPP_IOS_HELP = "오른쪽 아래(또는 위) ⋯ → 「다른 브라우저로 열기」 또는 「Safari로 열기」";
+  const INAPP_ANDROID_HELP = "주소를 복사해 크롬에 붙여넣어 주세요";
+  let installPrompt = null, installKind = null;
 
   const storeGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
   const storeSet = (k, v) => { try { localStorage.setItem(k, v); } catch { /* 저장 못 하면 이번만 */ } };
@@ -1178,23 +1191,116 @@
       || navigator.standalone === true;                                   // 아이폰 홈 화면 앱
   }
 
-  function installSuppressed() {
-    if (isStandalone() || storeGet(INSTALLED)) return true;
-    const t = +storeGet(INSTALL_DISMISSED);
-    return t > 0 && Date.now() - t < DISMISS_DAYS * 864e5;
+  // 브라우저 종류 (user agent). 인앱이면 설치 안내 대신 인앱 안내. 아이폰은 사파리만 '홈 화면에 추가'가 된다고 안내
+  function browserInfo(ua = navigator.userAgent || "", touch = navigator.maxTouchPoints || 0) {
+    const os = /Android/i.test(ua) ? "android"
+      : (/iPhone|iPad|iPod/i.test(ua) || (/Macintosh/.test(ua) && touch > 1)) ? "ios" : "pc";
+    const inapp = INAPP_UA.test(ua);
+    return {
+      os, inapp, kakao: /KAKAOTALK/i.test(ua), samsung: /SamsungBrowser/.test(ua),
+      safari: os === "ios" && !inapp && !/CriOS|FxiOS|EdgiOS|OPiOS|GSA\/|Whale|DuckDuckGo/.test(ua) && /Version\/[\d.]+.*Safari\//.test(ua),
+    };
   }
 
-  // 아이폰 브라우저: 사파리만 '홈 화면에 추가' 안내, 크롬·카카오톡 등 앱 안 브라우저는 사파리로 안내
-  function iosBrowser() {
-    const ua = navigator.userAgent || "";
-    if (/CriOS|FxiOS|EdgiOS|KAKAOTALK|NAVER|Instagram|FBAN|FBAV|Line\//.test(ua)) return "other";
-    return /Version\/[\d.]+.*Safari\//.test(ua) ? "safari" : "other";
+  // 인앱 → 기본 브라우저로 여는 주소. 없으면(아이폰 기타 인앱) null
+  function outsideUrl(info, href = location.href) {
+    if (info.kakao) return `kakaotalk://web/openExternal?url=${encodeURIComponent(href)}`;
+    if (info.os === "android") {
+      const u = new URL(href);
+      return `intent://${u.host}${u.pathname}${u.search}#Intent;scheme=${u.protocol.replace(":", "")};package=com.android.chrome;end`;
+    }
+    return null;
+  }
+
+  let bannerShown = null;                                  // 이번 방문에 띄운 안내 ('inapp' | 'notice' | 'install')
+  function claimBanner(name) {
+    if (bannerShown && bannerShown !== name) return false;
+    bannerShown = name;
+    return true;
+  }
+  function dismissedRecently(key) {
+    const t = +storeGet(key);
+    return t > 0 && Date.now() - t < DISMISS_DAYS[key] * 864e5;
+  }
+
+  // 휴대폰: 위쪽 안내(첫 방문·인앱)는 검색창·칩 바로 아래. 칩 줄은 데이터를 읽은 뒤에 그려져 높이가 나중에 바뀐다 → 바뀔 때마다 다시 맞춤
+  // 안내가 떠 있는 동안 알림(토스트)은 그 아래로 (--notice-bottom, .has-top-notice)
+  function placeTopNotice(node) {
+    const place = () => {
+      if (!MOBILE.matches) return;
+      const top = Math.round(el.topbar.getBoundingClientRect().bottom) + 8;
+      el.app.style.setProperty("--notice-top", `${top}px`);
+      if (node.offsetHeight) el.app.style.setProperty("--notice-bottom", `${top + node.offsetHeight}px`);
+    };
+    place();
+    const ro = typeof ResizeObserver === "function" ? new ResizeObserver(place) : null;
+    ro?.observe(el.topbar);
+    ro?.observe(node);
+    addEventListener("resize", place);
+    el.app.classList.add("has-top-notice");
+    return () => { ro?.disconnect(); removeEventListener("resize", place); el.app.classList.remove("has-top-notice"); };
+  }
+
+  // 주소 복사 (? # 는 뺀다). 인앱 브라우저마다 클립보드 API 가 막혀 있거나 응답 없이 멈추기도 해서
+  // 탭한 그 순간에 되는 textarea 복사를 먼저, 안 되면 클립보드 API 를 1초 제한으로
+  async function copyUrl() {
+    const url = location.origin + location.pathname;
+    const t = document.createElement("textarea");
+    t.value = url; t.setAttribute("readonly", ""); t.style.cssText = "position:fixed;top:0;left:0;opacity:0;font-size:16px";
+    document.body.appendChild(t);
+    t.select(); t.setSelectionRange(0, url.length);       // 아이폰은 select() 만으로는 선택이 안 된다
+    let done = false;
+    try { done = document.execCommand("copy"); } catch { done = false; }
+    t.remove();
+    if (!done && navigator.clipboard) {
+      done = await Promise.race([navigator.clipboard.writeText(url).then(() => true, () => false),
+                                 new Promise((res) => setTimeout(() => res(false), 1000))]);
+    }
+    toast(done ? "주소를 복사했어요. 브라우저 주소창에 붙여넣어 주세요" : `주소: ${url}`);
+  }
+
+  function showInapp(info) {
+    if (dismissedRecently(INAPP_DISMISSED) || !claimBanner("inapp")) return false;
+    const stop = placeTopNotice(el.inappBar);
+    const help = (failed) => {                             // 자동 전환이 없거나 안 됐을 때: 메뉴 안내 + 주소 복사
+      el.inappText.innerHTML = `${INAPP_TITLE}${info.os === "ios" ? INAPP_IOS_HELP : INAPP_ANDROID_HELP}`;
+      el.inappOpen.hidden = true;
+      el.inappCopy.hidden = false;
+      el.inappBar.dataset.state = failed ? "failed" : "help";
+    };
+    const url = outsideUrl(info);
+    if (url) {
+      el.inappText.innerHTML = INAPP_TITLE;
+      el.inappOpen.hidden = false;
+      el.inappCopy.hidden = true;
+      el.inappBar.dataset.state = "open";
+      el.inappOpen.addEventListener("click", () => {
+        location.href = url;
+        setTimeout(() => { if (!document.hidden) help(true); }, 1500);   // 브라우저가 떴으면 이 화면은 가려져 있다
+      });
+    } else help(false);
+    el.inappCopy.addEventListener("click", copyUrl);
+    el.inappClose.addEventListener("click", () => {
+      storeSet(INAPP_DISMISSED, String(Date.now()));
+      el.inappBar.hidden = true;
+      stop();
+    });
+    el.inappBar.hidden = false;
+    return true;
+  }
+
+  function installSuppressed(kind) {
+    if (isStandalone() || storeGet(INSTALLED)) return true;
+    return dismissedRecently(kind === "ios" || kind === "iosOther" ? IOS_DISMISSED : INSTALL_DISMISSED);
   }
 
   function showInstall(kind) {
-    if (installSuppressed()) return;
+    if (installSuppressed(kind) || !claimBanner("install")) return;
+    installKind = kind;
+    el.installBar.dataset.kind = kind;
     el.installText.innerHTML = INSTALL_TEXT[kind];
-    el.installGo.hidden = kind !== "prompt";
+    el.installGo.textContent = kind === "iosOther" ? "주소 복사" : "설치";
+    el.installGo.hidden = kind !== "prompt" && kind !== "iosOther";
     el.installBar.hidden = false;
     el.app.classList.add("has-install");
   }
@@ -1205,9 +1311,11 @@
   }
 
   window.addEventListener("beforeinstallprompt", (e) => {
-    e.preventDefault();                   // 크롬 기본 안내 대신 우리 띠 ([닫기] 했으면 아무것도 안 띄움)
+    e.preventDefault();                   // 크롬 기본 안내 대신 우리 띠 ([닫기] 했거나 다른 안내를 띄운 방문이면 아무것도 안 띄움)
+    const info = browserInfo();
+    if (info.inapp || info.os === "ios") return;   // 인앱·아이폰은 자기 안내가 따로 있다 (보통 이 이벤트가 오지도 않음)
     installPrompt = e;
-    showInstall("prompt");
+    showInstall("prompt");                // 삼성 인터넷 메뉴 안내가 떠 있었으면 [설치] 띠로 바뀐다
   });
   window.addEventListener("appinstalled", () => {
     storeSet(INSTALLED, "1"); installPrompt = null; hideInstall();
@@ -1243,8 +1351,12 @@
         if (el.installBar.offsetHeight) el.app.style.setProperty("--install-h", `${el.installBar.offsetHeight}px`);
       }).observe(el.installBar);
     }
-    el.installClose.addEventListener("click", () => { storeSet(INSTALL_DISMISSED, String(Date.now())); hideInstall(); });
+    el.installClose.addEventListener("click", () => {
+      storeSet(installKind === "ios" || installKind === "iosOther" ? IOS_DISMISSED : INSTALL_DISMISSED, String(Date.now()));
+      hideInstall();
+    });
     el.installGo.addEventListener("click", async () => {
+      if (installKind === "iosOther") return copyUrl();
       const p = installPrompt;
       if (!p) return hideInstall();
       installPrompt = null;               // prompt() 는 이벤트마다 한 번만 쓸 수 있다
@@ -1253,7 +1365,24 @@
       const { outcome } = await p.userChoice;
       if (outcome === "accepted") storeSet(INSTALLED, "1");  // 설치 창에서 취소하면 이번에만 숨김 (다음 방문 때 다시)
     });
-    if (deviceKind() === "ios") setTimeout(() => showInstall(iosBrowser() === "safari" ? "ios" : "iosOther"), 1200);
+    // 휴대폰 키보드가 올라오면(검색 입력 중) 띠를 숨긴다 — 검색창 아래·키보드 위에 떠서 입력을 가리지 않게
+    const vv = window.visualViewport;
+    const kbd = () => el.app.classList.toggle("kbd-open",
+      document.activeElement === el.q || (!!vv && vv.height < window.innerHeight * 0.75));
+    el.q.addEventListener("focus", kbd);
+    el.q.addEventListener("blur", () => setTimeout(kbd, 0));
+    vv?.addEventListener("resize", kbd);
+  }
+
+  // 순서대로 하나만: 인앱 안내 > 유튜브 첫 방문 안내 > 설치 안내 (안드로이드는 beforeinstallprompt 가 올 때 showInstall)
+  function bindBanners() {
+    const info = browserInfo();
+    const standalone = isStandalone();
+    if (!standalone && info.inapp && showInapp(info)) return;
+    if (bindNotice()) return;
+    if (standalone || info.inapp) return;                  // 앱 실행 중 / 인앱(설치가 안 되는 브라우저)이면 설치 안내 없음
+    if (info.os === "ios") setTimeout(() => showInstall(info.safari ? "ios" : "iosOther"), 1200);
+    else if (info.samsung) setTimeout(() => { if (!installPrompt) showInstall("samsung"); }, 3000);
   }
 
   // ---------------------------------------------------------------- 방문자 수 (GoatCounter 공개 카운터)
@@ -1320,30 +1449,25 @@
 
   // ---------------------------------------------------------------- 시작
   // 첫 방문 안내: YouTube API Services 사용·약관·Google 개인정보처리방침 (Developer Policies III.A.2). [확인] 하면 다시 안 뜸
+  // 띄웠으면 true (그 방문에는 설치 안내를 띄우지 않는다 — bindBanners)
   const NOTICE_KEY = "matjip-yt-notice";
   function bindNotice() {
-    if (storeGet(NOTICE_KEY)) return;
-    const place = () => {                       // 휴대폰: 검색창·칩 바로 아래
-      if (MOBILE.matches) el.app.style.setProperty("--notice-top", `${Math.round(el.topbar.getBoundingClientRect().bottom) + 8}px`);
-    };
-    place();
-    // 칩 줄은 데이터를 읽은 뒤에 그려져 검색창 영역 높이가 나중에 바뀐다 → 크기가 바뀔 때마다 다시 맞춤
-    const ro = typeof ResizeObserver === "function" ? new ResizeObserver(place) : null;
-    ro?.observe(el.topbar);
-    addEventListener("resize", place);
+    if (storeGet(NOTICE_KEY)) return false;
+    if (!claimBanner("notice")) return false;
+    const stop = placeTopNotice(el.ytNotice);   // 휴대폰: 검색창·칩 바로 아래
     el.ytNotice.hidden = false;
     el.ytNoticeOk.addEventListener("click", () => {
       storeSet(NOTICE_KEY, String(Date.now()));
       el.ytNotice.hidden = true;
-      ro?.disconnect();
-      removeEventListener("resize", place);
+      stop();
     });
+    return true;
   }
 
   async function main() {
     bind();
     bindInstall();
-    bindNotice();
+    bindBanners();
     countAppOpen();
     setView("map");
     // 모바일 첫 화면은 지도가 주인공: 시트는 접힌 바(손잡이 + 'N곳')로 시작
@@ -1391,6 +1515,7 @@
     }
   }
 
-  window.matjipDebug = { state, routeLinks, visitsRange, clampCenter, KOREA, level: () => map?.getLevel(), get map() { return map; } };
+  window.matjipDebug = { state, routeLinks, visitsRange, clampCenter, KOREA, browserInfo, outsideUrl, banner: () => bannerShown,
+                         level: () => map?.getLevel(), get map() { return map; } };
   main();
 })();
