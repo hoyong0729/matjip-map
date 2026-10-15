@@ -1209,7 +1209,32 @@
     installPrompt = e;
     showInstall("prompt");
   });
-  window.addEventListener("appinstalled", () => { storeSet(INSTALLED, "1"); installPrompt = null; hideInstall(); });
+  window.addEventListener("appinstalled", () => {
+    storeSet(INSTALLED, "1"); installPrompt = null; hideInstall();
+    countEvent("app-install");                            // 안드로이드 크롬 등 (아이폰 사파리에는 이 이벤트가 없음)
+  });
+
+  // ---------------------------------------------------------------- 앱 설치·앱으로 연 횟수 (GoatCounter 이벤트, 화면에는 표시 안 함)
+  // 숫자만 센다: 이벤트 이름만 보내고 기기 구분값·위치는 보내지 않는다. 로컬·확인용 주소에서는 index.html 로더가
+  // count.js 를 안 불러와 window.goatcounter 가 없으므로 집계되지 않는다. 일일 요약(python -m matjip report)이 읽는다
+  function countEvent(name) {
+    if (!window.goatcounter) return;
+    let tries = 0;
+    const go = () => {                                    // count.js 가 늦게 뜰 수 있어 잠깐 기다린다 (최대 10초)
+      if (typeof window.goatcounter.count === "function") window.goatcounter.count({ path: name, title: name, event: true });
+      else if (++tries < 20) setTimeout(go, 500);
+    };
+    go();
+  }
+  const APP_OPEN = "matjip-app-open";                      // 앱으로 연 날짜(한국)를 기억 → 하루 한 번만 'app-open'
+  const kstDay = (now = Date.now()) => new Date(now + 9 * 3600e3).toISOString().slice(0, 10);
+  function countAppOpen() {
+    if (!isStandalone()) return;
+    const day = kstDay();
+    if (storeGet(APP_OPEN) === day) return;
+    storeSet(APP_OPEN, day);
+    countEvent("app-open");
+  }
 
   function bindInstall() {
     // 띠 높이 → '마지막 업데이트'를 그 위로 (시트가 열려 있으면 띠가 숨겨져 0 이라, 보일 때마다 다시 잰다)
@@ -1289,6 +1314,7 @@
     bind();
     bindInstall();
     bindNotice();
+    countAppOpen();
     setView("map");
     // 모바일 첫 화면은 지도가 주인공: 시트는 접힌 바(손잡이 + 'N곳')로 시작
     if (MOBILE.matches) setSheet("closed", { animate: false });
