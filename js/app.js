@@ -1212,10 +1212,11 @@
     return null;
   }
 
-  let bannerShown = null;                                  // 이번 방문에 띄운 안내 ('inapp' | 'notice' | 'install')
+  // 이번 방문에 띄운 안내. 유튜브 첫 안내(아래쪽)·인앱 안내(위쪽)는 같이 뜰 수 있고, 설치 안내는 둘 다 없을 때만
+  const bannersShown = new Set();                          // 'inapp' | 'notice' | 'install'
   function claimBanner(name) {
-    if (bannerShown && bannerShown !== name) return false;
-    bannerShown = name;
+    if (name === "install" && (bannersShown.has("inapp") || bannersShown.has("notice"))) return false;
+    bannersShown.add(name);
     return true;
   }
   function dismissedRecently(key) {
@@ -1374,12 +1375,14 @@
     vv?.addEventListener("resize", kbd);
   }
 
-  // 순서대로 하나만: 인앱 안내 > 유튜브 첫 방문 안내 > 설치 안내 (안드로이드는 beforeinstallprompt 가 올 때 showInstall)
+  // 유튜브 첫 안내는 첫 방문에 항상 (YouTube 정책 III.A.2 이용 전 고지 — 다른 안내 때문에 미루지 않는다, 아래쪽).
+  // 인앱 안내는 위쪽에 같이. 설치 안내는 둘 다 없을 때만 (안드로이드는 beforeinstallprompt 가 올 때 showInstall)
   function bindBanners() {
     const info = browserInfo();
     const standalone = isStandalone();
-    if (!standalone && info.inapp && showInapp(info)) return;
-    if (bindNotice()) return;
+    const notice = bindNotice();
+    const inapp = !standalone && info.inapp && showInapp(info);
+    if (notice || inapp) return;
     if (standalone || info.inapp) return;                  // 앱 실행 중 / 인앱(설치가 안 되는 브라우저)이면 설치 안내 없음
     if (info.os === "ios") setTimeout(() => showInstall(info.safari ? "ios" : "iosOther"), 1200);
     else if (info.samsung) setTimeout(() => { if (!installPrompt) showInstall("samsung"); }, 3000);
@@ -1449,13 +1452,19 @@
 
   // ---------------------------------------------------------------- 시작
   // 첫 방문 안내: YouTube API Services 사용·약관·Google 개인정보처리방침 (Developer Policies III.A.2). [확인] 하면 다시 안 뜸
-  // 띄웠으면 true (그 방문에는 설치 안내를 띄우지 않는다 — bindBanners)
+  // 띄웠으면 true (그 방문에는 설치 안내를 띄우지 않는다 — bindBanners). 다른 안내와 상관없이 첫 방문엔 항상
   const NOTICE_KEY = "matjip-yt-notice";
   function bindNotice() {
     if (storeGet(NOTICE_KEY)) return false;
-    if (!claimBanner("notice")) return false;
-    const stop = placeTopNotice(el.ytNotice);   // 휴대폰: 검색창·칩 바로 아래
+    claimBanner("notice");
+    // 휴대폰: 시트 바로 위. 높이를 재서 '마지막 업데이트' 칸을 그 위로 올린다 (--bottom-notice-h)
+    const setH = () => { if (el.ytNotice.offsetHeight) el.app.style.setProperty("--bottom-notice-h", `${el.ytNotice.offsetHeight}px`); };
+    const ro = typeof ResizeObserver === "function" ? new ResizeObserver(setH) : null;
+    ro?.observe(el.ytNotice);
+    el.app.classList.add("has-bottom-notice");
+    const stop = () => { ro?.disconnect(); el.app.classList.remove("has-bottom-notice"); };
     el.ytNotice.hidden = false;
+    setH();
     el.ytNoticeOk.addEventListener("click", () => {
       storeSet(NOTICE_KEY, String(Date.now()));
       el.ytNotice.hidden = true;
@@ -1515,7 +1524,7 @@
     }
   }
 
-  window.matjipDebug = { state, routeLinks, visitsRange, clampCenter, KOREA, browserInfo, outsideUrl, banner: () => bannerShown,
+  window.matjipDebug = { state, routeLinks, visitsRange, clampCenter, KOREA, browserInfo, outsideUrl, banner: () => [...bannersShown],
                          level: () => map?.getLevel(), get map() { return map; } };
   main();
 })();
