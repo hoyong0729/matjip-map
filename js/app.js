@@ -284,7 +284,8 @@
         <div class="badges">${tvBadges(r)}${progs.filter((p) => p !== REGION_PROGRAM && !p.startsWith(BROADCAST)).map((p) => `<span class="badge badge-prog">${esc(p)}</span>`).join("")}${
           regionChannels(r).map((c) => `<span class="badge badge-prog">${esc(c)}</span>`).join("")}${
           progs.includes(REGION_PROGRAM) ? regionBadge : ""}${autoBadge(r)}${adBadges(r)}${viewsTag(maxViews(r))}${
-          r.videos.length > 1 ? `<span class="badge-count">영상 ${r.videos.length}개</span>` : ""}</div>
+          r.videos.length > 1 ? `<span class="badge-count">영상 ${r.videos.length}개</span>` : ""}${
+          r.videos[0] && r.videos[0].of > 1 ? `<span class="badge-count">이 영상의 ${r.videos[0].of}곳 중 ${r.videos[0].nth}번째</span>` : ""}</div>
       </div></li>`;
   }
 
@@ -339,7 +340,8 @@
         <li><a class="video" href="https://www.youtube.com/watch?v=${encodeURIComponent(v.id)}" target="_blank" rel="noopener">
           <div class="thumb"><img loading="lazy" src="${ytThumb(v.id)}" alt=""></div>
           <div><b>${esc(v.title)}</b><span>${esc(videoSource(v))} · ${esc(v.date)}${v.views ? ` · 조회수 ${fmtViews(v.views)}` : ""}${v.ad ? ` ${adBadge(v.ad)}` : ""}</span>${
-            v.ad && v.ad_note ? `<span class="ad-note">설명란 표기: “${esc(v.ad_note)}”</span>` : ""}</div></a></li>`).join("")}
+            v.ad && v.ad_note ? `<span class="ad-note">설명란 표기: “${esc(v.ad_note)}”</span>` : ""}</div></a>${
+          v.of > 1 ? sameVideoHTML(r, v) : ""}</li>`).join("")}
       </ul>
       <p class="yt-source">영상·썸네일·조회수 출처: <a href="https://www.youtube.com" target="_blank" rel="noopener">YouTube</a> · 영상을 누르면 YouTube 에서 열립니다</p>` : ""}
       <div class="route-bar">${r.lat != null ? `
@@ -359,6 +361,17 @@
     highlightPin(id);
     if (MOBILE.matches) setSheet("full");            // 핀·목록에서 가게를 누르면 바로 다 펼친다 (검색창·칩 바로 아래까지)
     if (pan && map && r.lat != null) focusOn(r);
+  }
+
+  // 한 영상에 사이트 가게가 여러 곳 (export 의 v.nth·v.of, 설명란 순서): '이 영상의 3곳 중 2번째' 를 누르면
+  // 같은 영상에 나온 다른 가게 목록이 펼쳐지고, 가게를 누르면 그 가게 상세로 (2026-10-16 — 중국집 영상의 2차 호프 같은 경우)
+  function sameVideoHTML(r, v) {
+    const shops = state.all.map((x) => ({ x, w: x.videos.find((y) => y.id === v.id) })).filter((o) => o.w)
+      .sort((a, b) => (a.w.nth || 99) - (b.w.nth || 99));
+    return `<button type="button" class="same-video" data-action="samevideo" aria-expanded="false">이 영상의 ${v.of}곳 중 ${v.nth}번째<span class="caret" aria-hidden="true">▾</span></button>
+      <ul class="same-list" hidden>${shops.map(({ x, w }) => `<li>${x.id === r.id
+        ? `<span class="same-cur">${w.nth || ""}. ${esc(x.name)}<small>지금 보는 가게</small></span>`
+        : `<button type="button" data-action="goto" data-id="${x.id}">${w.nth || ""}. ${esc(x.name)}<small>${esc(x.category)} · ${esc(x.hood || x.region)}</small><span class="chev" aria-hidden="true">›</span></button>`}</li>`).join("")}</ul>`;
   }
 
   function closeDetail() {
@@ -1127,6 +1140,12 @@
       const a = e.target.closest("[data-action]");
       if (!a) return;
       if (a.dataset.action === "back") { closeDetail(); if (MOBILE.matches) setSheet("full"); }
+      if (a.dataset.action === "samevideo") {               // 같은 영상의 다른 가게 목록 펼치기·접기
+        const list = a.nextElementSibling, open = list.hidden;
+        list.hidden = !open;
+        a.setAttribute("aria-expanded", String(open));
+      }
+      if (a.dataset.action === "goto") openDetail(+a.dataset.id);
       if (a.dataset.action === "mode") {
         state.routeMode = a.dataset.mode;
         for (const b of el.detail.querySelectorAll("[data-action=mode]")) b.setAttribute("aria-checked", String(b === a));

@@ -374,6 +374,22 @@ a { color: inherit; text-decoration: none; }
 .updated .credit-pill { pointer-events: auto; }                       /* '이용 안내' 링크는 눌려야 함 */
 /* 상세: 광고·지원 배지 근거(설명란 원문 한 줄)와 YouTube 출처 */
 .video .ad-note { display: block; margin-top: 3px; font-size: 11.5px; color: var(--ink-3); line-height: 1.4; }
+/* 한 영상에 가게가 여러 곳: '이 영상의 3곳 중 2번째' (누르면 같은 영상의 다른 가게 목록) */
+.same-video {
+  display: inline-flex; align-items: center; gap: 4px; margin: 6px 0 0; padding: 4px 10px; border: 1px solid var(--line-2);
+  border-radius: 999px; background: #fff; color: var(--ink-2); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.same-video .caret { display: inline-block; font-size: 10px; transition: transform .15s; }
+.same-video[aria-expanded="true"] .caret { transform: rotate(180deg); }
+.same-list { list-style: none; margin: 6px 0 0; padding: 0; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.same-list li + li { border-top: 1px solid var(--line); }
+.same-list button, .same-cur {
+  display: flex; align-items: baseline; gap: 6px; width: 100%; padding: 10px 12px; border: 0; background: #fff;
+  font: inherit; font-size: 13.5px; font-weight: 600; color: var(--ink); text-align: left; cursor: pointer;
+}
+.same-list small { font-size: 11.5px; font-weight: 500; color: var(--ink-3); }
+.same-list .chev { margin-left: auto; color: var(--ink-3); }
+.same-cur { background: var(--bg-2); color: var(--ink-2); cursor: default; }
 .yt-source { margin: 10px 0 0; font-size: 11.5px; color: var(--ink-3); }
 .yt-source a { color: inherit; text-decoration: underline; }
 .zoom {
