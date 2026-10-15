@@ -1276,13 +1276,43 @@
     return { today: `?start=${day}&end=${end}`, total: `?start=2000-01-01&end=${end}` };
   }
 
+  // 카운터 서버(goatcounter.com) 연결이 끊길 때가 있다 (2026-10-15 PC·휴대폰에서 간헐적 'Failed to fetch').
+  // 요청마다 8초 제한 + 두 번 더 시도, 그래도 실패하면 이 기기에 저장해 둔 마지막 숫자를 보여 준다 (없으면 그 줄만 숨김).
+  // main() 은 이 함수를 기다리지 않으므로 페이지 로딩을 늦추지 않는다
+  const VISITS_KEY = "matjip-visits";                     // 마지막으로 받은 {d: UTC 날짜, day, total} — 숫자만, 위치·기기 정보 없음
+  const VISITS_TRIES = 3, VISITS_TIMEOUT = 8000;
+  async function fetchCount(s) {
+    for (let i = 0; i < VISITS_TRIES; i++) {
+      const ctl = typeof AbortController === "function" ? new AbortController() : null;
+      const timer = ctl && setTimeout(() => ctl.abort(), VISITS_TIMEOUT);
+      try {
+        const r = await fetch(VISITS_URL + s, ctl ? { signal: ctl.signal } : undefined);
+        if (r.status === 403) return null;                // 카운터 공개 설정이 꺼짐 → 다시 해도 같음
+        if (r.ok) {
+          const d = await r.json();
+          if (d && d.count != null) return String(d.count);
+        }
+      } catch { /* 연결 끊김·시간 초과 → 다시 */ } finally { if (timer) clearTimeout(timer); }
+      if (i < VISITS_TRIES - 1) await new Promise((res) => setTimeout(res, 1500));
+    }
+    return null;
+  }
+
   async function loadVisits() {
     if (!window.goatcounter) return;
     const q = visitsRange();
-    const get = (s) => fetch(VISITS_URL + s).then((r) => (r.ok ? r.json() : null))
-      .then((d) => (d && d.count != null ? String(d.count) : null)).catch(() => null);
-    const [day, total] = await Promise.all([get(q.today), get(q.total)]);
-    if (total == null) return;
+    const today = utcDate(Date.now());                    // 카운터의 '오늘'은 UTC 날짜 (visitsRange 와 같은 기준)
+    let [day, total] = await Promise.all([fetchCount(q.today), fetchCount(q.total)]);
+    let saved = null;
+    try { saved = JSON.parse(storeGet(VISITS_KEY) || "null"); } catch { saved = null; }
+    if (total != null) {
+      if (day == null && saved && saved.d === today) day = saved.day;
+      storeSet(VISITS_KEY, JSON.stringify({ d: today, day, total }));
+    } else if (saved && saved.total != null) {            // 이번엔 못 받음 → 마지막으로 받은 숫자 (표시 문구는 똑같이)
+      total = saved.total;
+      day = saved.d === today ? saved.day : null;
+    }
+    if (total == null) return;                             // 받은 적도 없으면 그 줄만 숨김
     (el.updated.querySelector(".upd-main") || el.updated).insertAdjacentHTML("beforeend", `<span class="visits">${
       day != null ? ` · 오늘 방문 <b>${esc(day)}</b>` : ""} · 누적 <b>${esc(total)}</b></span>`);
     el.updated.hidden = false;
