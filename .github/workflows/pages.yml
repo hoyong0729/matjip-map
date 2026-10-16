@@ -1,0 +1,36 @@
+# matjip-map(공개) 저장소의 .github/workflows/pages.yml 원본 — matjip-source 의 자동 업데이트(pagesdeploy.py)가 실행한다.
+# Release 'site' 의 site.zip(웹 화면 파일, 허용 목록만)을 받아 GitHub Pages 로 배포 → git 커밋 기록이 남지 않는다.
+# 저장소를 다시 만들면 이 파일을 .github/workflows/pages.yml 로 다시 올리고, Settings → Pages → Source: GitHub Actions.
+name: pages
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: 배포 묶음 받기
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download site --pattern site.zip --repo "$GITHUB_REPOSITORY"
+          mkdir site && unzip -q site.zip -d site && rm site.zip
+          test -f site/index.html && test -f site/data/restaurants.json && test -f site/config.js
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deployment
+        uses: actions/deploy-pages@v4
